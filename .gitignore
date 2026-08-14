@@ -1,0 +1,15 @@
+*.iml
+.gradle
+.DS_Store
+/build
+/captures
+.externalNativeBuild
+.cxx
+
+# 카카오 네이티브 앱 키 · REST API 키가 들어 있다. 절대 올리지 않는다.
+# 팀원은 README 를 보고 각자 채운다.
+/local.properties
+local.properties
+
+# IDE 개인 설정 — 연결된 기기, 실행 구성, 로컬 경로 등 사람마다 다르다.
+.idea/
