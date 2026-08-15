@@ -1,6 +1,6 @@
 package com.example.safelight.ui.theme
 
-import androidx.compose.foundation.isSystemInDarkTheme
+
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
@@ -27,6 +27,7 @@ data class SafeColors(
     val textStrong: Color,
     val textMuted: Color,
     val mapBg: Color,
+    val authGrid: Color,
     val danger: Color,
     val warning: Color,
     val safe: Color,
@@ -36,14 +37,14 @@ data class SafeColors(
 private val LightSafeColors = SafeColors(
     bluePrimary = BluePrimary, blueDeep = BlueDeep, blueTint = BlueTint,
     bg = Bg, surface = Surface, border = Border,
-    textStrong = TextStrong, textMuted = TextMuted, mapBg = MapBg,
+    textStrong = TextStrong, textMuted = TextMuted, mapBg = MapBg, authGrid = AuthGrid,
     danger = Danger, warning = Warning, safe = Safe, info = Info,
 )
 
 private val DarkSafeColors = SafeColors(
     bluePrimary = BluePrimaryDark, blueDeep = BlueDeep, blueTint = BlueTintDark,
     bg = BgDark, surface = SurfaceDark, border = BorderDark,
-    textStrong = TextStrongDark, textMuted = TextMutedDark, mapBg = MapBgDark,
+    textStrong = TextStrongDark, textMuted = TextMutedDark, mapBg = MapBgDark, authGrid = AuthGridDark,
     danger = Danger, warning = Warning, safe = Safe, info = Info,
 )
 
@@ -83,8 +84,11 @@ private val LocalSafeColors = staticCompositionLocalOf { LightSafeColors }
 
 @Composable
 fun SafeLightTheme(
-    // 웹은 야간 모드를 localStorage('ls-night') 로 직접 토글한다. 앱에서도 나중에 사용자 토글로 바꿀 자리다.
-    darkTheme: Boolean = isSystemInDarkTheme(),
+    // 기기의 다크 모드를 따라가지 않는다. 웹의 야간 모드는 시스템 설정이 아니라
+    // 사용자가 헤더에서 직접 켜는 토글(localStorage 'ls-night')이고 기본값은 밝은 화면이다.
+    // isSystemInDarkTheme() 을 쓰면 폰이 다크 모드인 사람만 웹과 다른 화면을 보게 된다.
+    // 야간 모드 토글을 만들 때 이 인자에 그 상태를 넘긴다.
+    darkTheme: Boolean = false,
     content: @Composable () -> Unit
 ) {
     // Material You(다이내믹 컬러)는 쓰지 않는다. 기기 배경색이 White & Blue 아이덴티티를 덮어버린다.

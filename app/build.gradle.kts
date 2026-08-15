@@ -14,6 +14,12 @@ val localProps = Properties().apply {
 }
 fun secret(key: String): String = localProps.getProperty(key) ?: ""
 
+// 백엔드 주소는 사람마다 다르다(에뮬레이터냐 실기기냐, 팀원 PC 냐). 소스를 고치게 하면
+// 매번 커밋에 섞여 들어오므로 local.properties 에서 덮어쓰게 하고 기본값만 여기 둔다.
+//   에뮬레이터 : http://10.0.2.2:8080/   (기본값 — 10.0.2.2 는 에뮬레이터가 보는 본 PC 의 localhost)
+//   실기기 USB : http://localhost:8080/  + `adb reverse tcp:8080 tcp:8080`
+val apiBaseUrl: String = localProps.getProperty("API_BASE_URL") ?: "http://10.0.2.2:8080/"
+
 android {
     namespace = "com.example.safelight"
     compileSdk {
@@ -35,12 +41,10 @@ android {
 
     buildTypes {
         debug {
-            // 10.0.2.2 = 에뮬레이터에서 본 PC 의 localhost.
-            // 실기기 USB 로 붙일 땐 `adb reverse tcp:8080 tcp:8080` 후 http://localhost:8080/ 으로 바꾼다.
-            buildConfigField("String", "API_BASE_URL", "\"http://10.0.2.2:8080/\"")
+            buildConfigField("String", "API_BASE_URL", "\"$apiBaseUrl\"")
         }
         release {
-            buildConfigField("String", "API_BASE_URL", "\"http://10.0.2.2:8080/\"")
+            buildConfigField("String", "API_BASE_URL", "\"$apiBaseUrl\"")
             optimization {
                 enable = false
             }

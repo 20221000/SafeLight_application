@@ -16,6 +16,7 @@ val Border = Color(0xFFE4E9F2)
 val TextStrong = Color(0xFF0F172A)
 val TextMuted = Color(0xFF64748B)
 val MapBg = Color(0xFFE8EEF6)
+val AuthGrid = Color(0xFFEEF2F8)   // 로그인·회원가입 배경 격자선
 
 // --- 다크 (.ls-dark = 야간 모드) ---
 val BluePrimaryDark = Color(0xFF3B82F6)
@@ -26,6 +27,8 @@ val BorderDark = Color(0xFF1F2C48)
 val TextStrongDark = Color(0xFFF1F5F9)
 val TextMutedDark = Color(0xFF94A3B8)
 val MapBgDark = Color(0xFF0E1626)
+// 밝은 격자선을 그대로 두면 어두운 배경 위에 흰 줄이 그대로 남는다. 배경보다 살짝 밝은 정도로만.
+val AuthGridDark = Color(0xFF131C2E)
 
 // --- 상태색 (라이트·다크 공통) ---
 // tokens.js 의 LEVEL_HEX 와 같은 값이다 — 위험구역 원·배지 색이 여기서 나온다.

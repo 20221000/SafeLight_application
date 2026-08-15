@@ -1,7 +1,7 @@
 # Safe Light — Android
 
 실시간 안전 지도 서비스 **Safe Light** 의 안드로이드 앱.
-웹 프론트엔드([light-safe](https://github.com/20221000/light-safe))에서 만든 화면을 네이티브로 옮긴다.
+웹 프론트엔드([SafeLight_frontend](https://github.com/20221000/SafeLight_frontend))에서 만든 화면을 네이티브로 옮긴다.
 백엔드는 별도 저장소의 Spring 서버를 그대로 쓴다.
 
 ## 기술 구성
@@ -39,6 +39,12 @@ KAKAO_NATIVE_APP_KEY=(네이티브 앱 키)
 KAKAO_REST_API_KEY=(REST API 키)
 ```
 
+백엔드 주소도 여기서 덮어쓴다(생략하면 에뮬레이터용 `http://10.0.2.2:8080/`).
+
+```properties
+API_BASE_URL=http://localhost:8080/
+```
+
 - **네이티브 앱 키** — 지도 렌더링(Kakao Maps SDK)
 - **REST API 키** — 장소검색 · 역지오코딩(Kakao Local REST)
 
@@ -50,7 +56,7 @@ KAKAO_REST_API_KEY=(REST API 키)
 
 디버그 빌드의 기본값은 `http://10.0.2.2:8080/` — 에뮬레이터에서 본 PC 의 localhost 다.
 
-실기기를 USB 로 붙여 쓸 때는 포트를 넘겨주고 `app/build.gradle.kts` 의 `API_BASE_URL` 을 `http://localhost:8080/` 으로 바꾼다.
+실기기를 USB 로 붙여 쓸 때는 위 `API_BASE_URL` 을 `http://localhost:8080/` 으로 두고 포트를 넘겨준다.
 
 ```bash
 adb reverse tcp:8080 tcp:8080
@@ -58,6 +64,30 @@ adb reverse tcp:8080 tcp:8080
 
 ## 웹과 다른 점
 
-- **확대 레벨 방향이 반대다.** 웹 JS SDK 는 1이 최대 확대지만, 안드로이드 v2 는 숫자가 클수록 확대다. 웹의 레벨 상수를 그대로 옮기면 안 된다.
-- **HTML 오버레이를 못 쓴다.** 웹의 `CustomOverlay` 는 `LabelLayer`, 위험구역 원은 `ShapeLayer`, 경로선은 `RouteLineLayer` 로 다시 그려야 한다.
+지도를 옮기면서 하나씩 부딪힌 것들이다. 값을 고칠 땐 웹의 대응 지점도 같이 고쳐야 두 화면이 갈리지 않는다.
+
+- **확대 레벨은 방향도 반대고 눈금도 안 맞는다.** 웹 JS SDK 는 1이 최대 확대, 안드로이드 v2 는 숫자가 클수록 확대다.
+  게다가 둘 다 한 단계가 2배지만 서로 겹치지 않는다 — 웹 L4(2.0 m/px)는 안드로이드 z15(3.06)와 z16(1.53) 사이에 떨어진다.
+  실측해서 가까운 쪽인 `zoom = 20 - webLevel` 로 맞췄다(`MapLayerStyle.kt` 에 측정값과 근거가 있다).
+- **HTML 오버레이를 못 쓴다.** 웹의 `CustomOverlay` 는 전부 `LabelStyle.from(Bitmap)` 으로 다시 그린다(`MapMarkers.kt`).
+  CSS 의 padding·radius·border·shadow 를 Canvas 로 옮긴 것이라 숫자가 웹 스타일과 1:1 로 대응한다.
+- **레이어 zOrder 는 0 부터 세면 안 된다.** 카카오 기본 지도의 라벨 레이어가 `LabelManager.DEFAULT_Z_ORDER`(=10001)를 쓴다.
+  웹의 zIndex(2·3·4)를 그대로 옮기면 우리 마커가 전부 지도 POI 아이콘 **아래**로 깔린다.
+  큰 마커(편의점 상호 알약)는 가장자리가 삐져나와 보이지만, 작은 시설 점은 통째로 가려져 아예 안 보인다.
+  같은 이유로 `ShapeLayer` 도 `ShapeLayerPass.Overlay` 로 만들어야 위험구역 원이 보인다.
+- **원은 `DotPoints.fromCircle` 로 그리면 안 된다.** 그쪽 반지름은 화면 픽셀이라 확대해도 원 크기가 그대로다.
+  미터 단위인 위험구역은 `MapPoints.fromLatLng` 로 다각형을 직접 만들고, **첫 점을 끝에 한 번 더 넣어 닫는다**
+  (채움은 알아서 닫히지만 테두리 선은 안 닫혀 한 곳이 끊긴다).
+- **라벨 레이어는 `CompetitionType.None`** 으로 둔다. 기본값은 겹치는 라벨을 감춰서, 웹에서 다 보이던 점이 안드로이드에서만 사라진다.
+- **다크 모드는 기기 설정을 따라가지 않는다.** 웹의 야간 모드는 시스템 설정이 아니라 사용자가 직접 켜는 토글이고 기본값은 밝은 화면이다.
+- **카카오 Local REST 로 편의점을 찾는다.** 안드로이드 지도 SDK 에는 웹의 `kakao.maps.services` 대응물이 없다.
 - **경로 계산은 백엔드가 한다.** 카카오 길찾기 API 는 쓰지 않는다.
+  경로 선은 `RouteLineManager` 로 그린다(`Polyline` 대응물). 이 레이어도 zOrder 를 10001 위에서 매긴다.
+- **바텀시트는 손가락 드래그만 본다.** `NestedScrollConnection` 에서 `source == UserInput` 을 확인하지 않으면
+  화면에 처음 들어올 때 시트가 혼자 끝까지 올라간다 — 입력칸에 포커스가 잡히면서 Compose 가 '보이게 하려고'
+  흘리는 스크롤까지 드래그로 세기 때문이다(`DragSheet.kt`).
+- **시트가 가리는 만큼은 `KakaoMap.setPadding` 으로 알린다.** 웹은 `setCenter` 뒤에 `panBy` 로 밀지만,
+  안드로이드는 지도에 여백을 알려 두면 카메라 이동·`fitMapPoints` 가 알아서 보정된다.
+- **지도 준비 여부는 상태로 들고 있어야 한다.** `arrayOfNulls` 홀더에 지도를 넣는 것만으로는 아무도 다시 그리지 않는다.
+  `mapReady` 같은 상태를 `LaunchedEffect` 키에 넣지 않으면, 화면에 들어올 때 이미 정해져 있던 것(안내 중인 경로 등)이
+  지도가 준비되기 전에 한 번 시도되고 끝나 영영 안 그려진다.
