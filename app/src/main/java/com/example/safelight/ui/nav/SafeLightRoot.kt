@@ -1,5 +1,6 @@
 package com.example.safelight.ui.nav
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.AlertDialog
@@ -11,11 +12,15 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.repeatOnLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavType
@@ -24,13 +29,19 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import com.example.safelight.ui.admin.AdminRoot
 import com.example.safelight.ui.auth.AuthViewModel
 import com.example.safelight.ui.auth.MyInfoScreen
 import com.example.safelight.ui.community.CommunityScreen
 import com.example.safelight.ui.community.CommunityViewModel
 import com.example.safelight.ui.community.PostDetailScreen
 import com.example.safelight.ui.community.PostWriteScreen
+import com.example.safelight.ui.friends.FriendsScreen
 import com.example.safelight.ui.layout.SafeLightHeader
+import com.example.safelight.ui.messages.MessagesScreen
+import com.example.safelight.ui.notifications.NotificationsScreen
+import com.example.safelight.ui.notifications.UNREAD_POLL_MS
+import com.example.safelight.ui.notifications.UnreadViewModel
 import com.example.safelight.ui.map.MapCameraState
 import com.example.safelight.ui.map.MapScreen
 import com.example.safelight.ui.route.ActiveRoute
@@ -38,6 +49,7 @@ import com.example.safelight.ui.route.RouteScreen
 import com.example.safelight.ui.search.PlaceSearchViewModel
 import com.example.safelight.ui.search.SearchedPlace
 import com.example.safelight.ui.theme.SafeLightTheme
+import kotlinx.coroutines.delay
 
 /**
  * 웹 MobileShell 의 자리 — 헤더 + 본문 + 하단 탭바.
@@ -62,8 +74,29 @@ fun SafeLightRoot(night: Boolean, onToggleNight: () -> Unit) {
     val communityVm: CommunityViewModel = viewModel()
     // 글을 고치고 상세로 돌아왔을 때 다시 읽게 하는 표식. 값이 바뀌는 것 자체가 신호다.
     var communityRevision by remember { mutableStateOf(0) }
+    // 헤더 벨의 안 읽음 수. 알림함·쪽지함에서 읽고 나오면 그쪽이 다시 세라고 알려준다.
+    val unreadVm: UnreadViewModel = viewModel()
+    // 관리자 콘솔은 사용자 화면과 셸 자체가 다르다(웹도 AdminShell 로 통째로 갈아탄다).
+    // 그래서 NavHost 의 목적지가 아니라 이 화면을 덮는 별도 상태로 둔다.
+    var adminOpen by remember { mutableStateOf(false) }
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = backStackEntry?.destination?.route
+
+    // 화면을 보고 있는 동안에만 다시 센다. 켜 두기만 한 앱이 서버를 계속 두드릴 이유가 없다.
+    // (웹은 focus·visibilitychange 로 같은 일을 한다.)
+    val lifecycleOwner = LocalLifecycleOwner.current
+    LaunchedEffect(authVm.user) {
+        if (authVm.user == null) {
+            unreadVm.clear()
+            return@LaunchedEffect
+        }
+        lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
+            while (true) {
+                unreadVm.refresh()
+                delay(UNREAD_POLL_MS)
+            }
+        }
+    }
 
     fun goToTab(route: String) {
         if (currentRoute == route) return
@@ -88,6 +121,20 @@ fun SafeLightRoot(night: Boolean, onToggleNight: () -> Unit) {
         goToMapTab()
     }
 
+    // 콘솔이 열려 있으면 사용자 화면을 통째로 덮는다. 관리자가 아니게 되면(로그아웃 등) 저절로 닫힌다.
+    if (adminOpen && authVm.user?.isAdmin == true) {
+        // 뒤로가기는 탭 사이를 오가는 게 아니라 콘솔을 닫는 것이어야 한다.
+        BackHandler { adminOpen = false }
+        AdminRoot(
+            onExit = { adminOpen = false },
+            onLogout = {
+                authVm.logout()
+                adminOpen = false
+            },
+        )
+        return
+    }
+
     Scaffold(
         containerColor = SafeLightTheme.colors.bg,
         topBar = {
@@ -99,6 +146,11 @@ fun SafeLightRoot(night: Boolean, onToggleNight: () -> Unit) {
                 onPickPlace = ::pickPlace,
                 night = night,
                 onToggleNight = onToggleNight,
+                // 벨은 웹과 같이 로그인한 사용자에게만 보인다.
+                loggedIn = authVm.user != null,
+                unreadEmergency = unreadVm.emergency,
+                unreadMessage = unreadVm.message,
+                onOpenNotifications = { navController.navigate("myinfo/notifications") },
             )
         },
         bottomBar = {
@@ -213,7 +265,47 @@ fun SafeLightRoot(night: Boolean, onToggleNight: () -> Unit) {
                     },
                 )
             }
-            composable(UserTab.MyInfo.route) { MyInfoScreen(authVm) }
+            composable(UserTab.MyInfo.route) {
+                MyInfoScreen(
+                    vm = authVm,
+                    onOpenPost = { postId ->
+                        communityVm.countView(postId)
+                        navController.navigate("community/post/$postId")
+                    },
+                    onOpenNotifications = { navController.navigate("myinfo/notifications") },
+                    onOpenMessages = { navController.navigate("myinfo/messages") },
+                    onOpenFriends = { navController.navigate("myinfo/friends") },
+                    onOpenAdmin = { adminOpen = true },
+                )
+            }
+            composable("myinfo/friends") {
+                FriendsScreen(
+                    onBack = { navController.popBackStack() },
+                    // 쪽지는 받는 사람을 미리 고른 채로 쪽지함을 연다(웹도 state 로 넘긴다).
+                    onWriteMessage = { navController.navigate("myinfo/messages?to=$it") },
+                )
+            }
+            composable(
+                "myinfo/messages?to={to}",
+                arguments = listOf(
+                    navArgument("to") { type = NavType.LongType; defaultValue = 0L },
+                ),
+            ) { entry ->
+                MessagesScreen(
+                    openWith = entry.arguments?.getLong("to"),
+                    onBack = { navController.popBackStack() },
+                    onUnreadChanged = unreadVm::refresh,
+                )
+            }
+            composable("myinfo/notifications") {
+                NotificationsScreen(
+                    user = authVm.user,
+                    onBack = { navController.popBackStack() },
+                    onWriteMessage = { navController.navigate("myinfo/messages?to=$it") },
+                    onOpenFriends = { navController.navigate("myinfo/friends") },
+                    onUnreadChanged = unreadVm::refresh,
+                )
+            }
         }
     }
 

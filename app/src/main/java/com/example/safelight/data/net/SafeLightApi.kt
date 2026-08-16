@@ -10,6 +10,7 @@ import retrofit2.http.Body
 import retrofit2.http.DELETE
 import retrofit2.http.GET
 import retrofit2.http.Multipart
+import retrofit2.http.PATCH
 import retrofit2.http.POST
 import retrofit2.http.PUT
 import retrofit2.http.Part
@@ -160,6 +161,108 @@ interface SafeLightApi {
 
     @DELETE("posts/{postId}/likes")
     suspend fun unlikePost(@Path("postId") postId: Long): Response<ApiEnvelope<JsonElement>>
+
+    // ── 내 정보 ────────────────────────────────────────────────────────────────
+    /**
+     * 프로필. 이메일·전화·가입일에 더해 허위신고 횟수·블랙리스트 여부까지 한 번에 준다.
+     * 로그인 당시 토큰에서 꺼내 둔 값과 달리 서버의 현재 값이라 관리자가 바꾼 상태도 보인다.
+     */
+    @GET("users/{userId}")
+    suspend fun getProfile(@Path("userId") userId: Long): Response<ApiEnvelope<UserProfileDto>>
+
+    @PUT("users/{userId}")
+    suspend fun updateProfile(
+        @Path("userId") userId: Long,
+        @Body body: ProfileUpdateRequest,
+    ): Response<ApiEnvelope<ProfileUpdatedDto>>
+
+    @DELETE("users/{userId}")
+    suspend fun withdraw(@Path("userId") userId: Long): Response<ApiEnvelope<JsonElement>>
+
+    /** 내가 쓴 글. 목록 한 줄에 필요한 것만 오고 작성자 정보는 없다(전부 나다). */
+    @GET("users/my/posts")
+    suspend fun getMyPosts(): Response<ApiEnvelope<List<PostListDto>>>
+
+    /**
+     * 내 신고 내역. `users/my/reports` 도 같은 목록을 주지만 5개 필드로 줄어 있어서,
+     * 좌표·위험도·인근 CCTV 까지 주는 이쪽을 쓴다(웹도 같다).
+     */
+    @GET("emergency-reports/my")
+    suspend fun getMyReports(): Response<ApiEnvelope<List<EmergencyReportDto>>>
+
+    @GET("messages/unread-count")
+    suspend fun getUnreadMessageCount(): Response<ApiEnvelope<UnreadCountDto>>
+
+    @GET("notifications/unread-count")
+    suspend fun getUnreadNotificationCount(): Response<ApiEnvelope<UnreadCountDto>>
+
+    // ── 친구 ──────────────────────────────────────────────────────────────────
+    @GET("friends")
+    suspend fun getFriends(): Response<ApiEnvelope<List<FriendDto>>>
+
+    @GET("friends/requests/received")
+    suspend fun getReceivedRequests(): Response<ApiEnvelope<List<ReceivedRequestDto>>>
+
+    @GET("friends/requests/sent")
+    suspend fun getSentRequests(): Response<ApiEnvelope<List<SentRequestDto>>>
+
+    @POST("friends/requests")
+    suspend fun sendFriendRequest(@Body body: FriendRequestBody): Response<ApiEnvelope<JsonElement>>
+
+    @PUT("friends/requests/{requestId}/accept")
+    suspend fun acceptFriendRequest(@Path("requestId") requestId: Long): Response<ApiEnvelope<JsonElement>>
+
+    @PUT("friends/requests/{requestId}/reject")
+    suspend fun rejectFriendRequest(@Path("requestId") requestId: Long): Response<ApiEnvelope<JsonElement>>
+
+    @DELETE("friends/requests/{requestId}")
+    suspend fun cancelFriendRequest(@Path("requestId") requestId: Long): Response<ApiEnvelope<JsonElement>>
+
+    /** 경로 변수는 친구 관계 id 가 아니라 상대의 userId 다(백엔드 `/friends/{user_id}`). */
+    @DELETE("friends/{friendUserId}")
+    suspend fun deleteFriend(@Path("friendUserId") friendUserId: Long): Response<ApiEnvelope<JsonElement>>
+
+    /** 본문 없이 보내면 "Required request body is missing" 400 이다 — 값은 필수다. */
+    @PUT("friends/{friendsId}/emergency-allow")
+    suspend fun setEmergencyAllow(
+        @Path("friendsId") friendsId: Long,
+        @Body body: EmergencyAllowRequest,
+    ): Response<ApiEnvelope<FriendDto>>
+
+    // ── 쪽지 ──────────────────────────────────────────────────────────────────
+    @GET("messages/received")
+    suspend fun getReceivedMessages(): Response<ApiEnvelope<List<ReceivedMessageDto>>>
+
+    @GET("messages/sent")
+    suspend fun getSentMessages(): Response<ApiEnvelope<List<SentMessageDto>>>
+
+    /** 상세 조회에는 부수효과가 있다 — 받는 사람이 열면 그 쪽지가 읽음으로 바뀐다. */
+    @GET("messages/{messageId}")
+    suspend fun readMessage(@Path("messageId") messageId: Long): Response<ApiEnvelope<JsonElement>>
+
+    @POST("messages/{receiverId}")
+    suspend fun sendMessage(
+        @Path("receiverId") receiverId: Long,
+        @Body body: MessageSendRequest,
+    ): Response<ApiEnvelope<JsonElement>>
+
+    @DELETE("messages/{messageId}")
+    suspend fun deleteMessage(@Path("messageId") messageId: Long): Response<ApiEnvelope<JsonElement>>
+
+    // ── 알림 ──────────────────────────────────────────────────────────────────
+    @GET("notifications")
+    suspend fun getNotifications(): Response<ApiEnvelope<List<NotificationDto>>>
+
+    @PATCH("notifications/{notificationId}/read")
+    suspend fun markNotificationRead(
+        @Path("notificationId") notificationId: Long,
+    ): Response<ApiEnvelope<JsonElement>>
+
+    /** 신고자가 위치 공유를 허용한 친구만 볼 수 있다. 아니면 403 과 사유가 온다. */
+    @GET("emergency-reports/{reportId}/shared-location")
+    suspend fun getSharedLocation(
+        @Path("reportId") reportId: Long,
+    ): Response<ApiEnvelope<SharedLocationDto>>
 }
 
 @Serializable
@@ -342,6 +445,171 @@ data class PostUpdateRequest(
     val title: String,
     val content: String,
     val category: String? = null,
+)
+
+/**
+ * 프로필 조회 응답. 백엔드가 record 가 아니라 Map 으로 만들어 보내는 자리라
+ * 키 이름은 `UserService.getProfile` 을 그대로 옮긴 것이다.
+ */
+@Serializable
+data class UserProfileDto(
+    val userId: Long = 0,
+    val username: String = "",
+    val nickname: String = "",
+    val email: String? = null,
+    val phone: String? = null,
+    /** USER · ADMIN */
+    val role: String = "USER",
+    val falseReportCount: Int = 0,
+    val isBlacklisted: Boolean = false,
+    val createdAt: String = "",
+)
+
+/**
+ * 프로필 수정. 바뀐 것만 담아 보낸다 — null 인 필드는 아예 직렬화되지 않는다.
+ * 백엔드는 값이 오면 그 필드를 덮어쓰므로, 안 바뀐 이메일을 같이 보내면 중복검사에 걸릴 여지가 있다.
+ */
+@Serializable
+data class ProfileUpdateRequest(
+    val nickname: String? = null,
+    val email: String? = null,
+    val phone: String? = null,
+    val password: String? = null,
+)
+
+@Serializable
+data class ProfileUpdatedDto(
+    val userId: Long = 0,
+    val nickname: String = "",
+    val email: String? = null,
+    val phone: String? = null,
+)
+
+/**
+ * 긴급 신고 한 건. 백엔드 EmergencyReportResponse.
+ *
+ * [reportStatus] 는 RECEIVED · RESOLVED · FALSE 뿐이다(PROCESSING 은 없다).
+ * 허위 여부는 상태가 아니라 [isFalseReport] 로 따로 온다.
+ */
+@Serializable
+data class EmergencyReportDto(
+    val reportId: Long = 0,
+    val userId: Long = 0,
+    val nickname: String = "",
+    val latitude: Double? = null,
+    val longitude: Double? = null,
+    val reportStatus: String = "RECEIVED",
+    val description: String? = null,
+    val isFalseReport: Boolean = false,
+    val dangerZoneId: Long? = null,
+    /** 신고가 속한 위험구역의 등급 — HIGH · MEDIUM · LOW */
+    val dangerLevel: String? = null,
+    val nearestCctv: CctvDto? = null,
+    val reportedAt: String = "",
+)
+
+/** `{ unreadCount }` 한 줄짜리 응답. 쪽지·알림이 같은 모양이다. */
+@Serializable
+data class UnreadCountDto(
+    val unreadCount: Int = 0,
+)
+
+/**
+ * 친구 한 명. 긴급 위치 공유는 **방향이 둘**이라 값도 둘이다.
+ *  - [isEmergencyAllowed] 내가 이 친구에게 내 위치를 보여주는지 (내가 바꿀 수 있는 값)
+ *  - [isEmergencyAllowedByFriend] 이 친구가 나에게 자기 위치를 보여주는지 (읽기 전용)
+ *
+ * 뒤쪽이 꺼져 있으면 그 친구의 긴급 위치를 열어도 403 이다.
+ */
+@Serializable
+data class FriendDto(
+    val friendsId: Long = 0,
+    val friendUserId: Long = 0,
+    val friendNickname: String = "",
+    val isEmergencyAllowed: Boolean = false,
+    val isEmergencyAllowedByFriend: Boolean = false,
+)
+
+@Serializable
+data class ReceivedRequestDto(
+    val requestId: Long = 0,
+    val senderId: Long = 0,
+    val senderNickname: String = "",
+)
+
+@Serializable
+data class SentRequestDto(
+    val requestId: Long = 0,
+    val receiverId: Long = 0,
+    val receiverNickname: String = "",
+)
+
+/**
+ * 친구 요청. 아이디(username)로만 보낸다 — 숫자 userId 는 사용자가 알 방법이 없다.
+ * 두 필드를 같이 실으면 백엔드가 400 으로 거절하므로 [targetUserId] 는 늘 null 로 둔다.
+ */
+@Serializable
+data class FriendRequestBody(
+    val targetUsername: String,
+    val targetUserId: Long? = null,
+)
+
+@Serializable
+data class EmergencyAllowRequest(
+    val isEmergencyAllowed: Boolean,
+)
+
+@Serializable
+data class ReceivedMessageDto(
+    val messageId: Long = 0,
+    val senderId: Long = 0,
+    val senderNickname: String = "",
+    val content: String = "",
+    val isRead: Boolean = false,
+    val createdAt: String = "",
+)
+
+@Serializable
+data class SentMessageDto(
+    val messageId: Long = 0,
+    val receiverId: Long = 0,
+    val receiverNickname: String = "",
+    val content: String = "",
+    val isRead: Boolean = false,
+    val createdAt: String = "",
+)
+
+@Serializable
+data class MessageSendRequest(
+    val content: String,
+)
+
+/** 친구의 긴급신고 알림. 백엔드 notifications 테이블은 신고에만 걸려 있어 쪽지 알림은 담기지 않는다. */
+@Serializable
+data class NotificationDto(
+    val notificationId: Long = 0,
+    val notificationType: String = "",
+    val title: String = "",
+    val message: String = "",
+    val isRead: Boolean = false,
+    val reportId: Long? = null,
+    val reporterUserId: Long? = null,
+    val reporterNickname: String = "",
+    val createdAt: String = "",
+)
+
+@Serializable
+data class SharedLocationDto(
+    val reportId: Long = 0,
+    val reporterUserId: Long = 0,
+    val reporterNickname: String = "",
+    val latitude: Double = 0.0,
+    val longitude: Double = 0.0,
+    val description: String? = null,
+    val reportStatus: String = "",
+    val dangerZoneId: Long? = null,
+    val dangerLevel: String? = null,
+    val reportedAt: String = "",
 )
 
 /** [parentId] 가 null 이면 댓글, 값이 있으면 그 댓글의 답글이다. */

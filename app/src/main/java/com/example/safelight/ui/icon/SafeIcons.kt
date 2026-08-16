@@ -352,4 +352,120 @@ object SafeIcons {
             strokeWidth = 2f,
         )
     }
+
+    /** 더 들어가는 줄 끝의 오른쪽 꺾쇠. 웹 '내 정보' 카드 줄들과 같은 굵기 2 다. */
+    val ChevronRight: ImageVector by lazy {
+        strokeIcon("ChevronRight", "M9 6l6 6-6 6", strokeWidth = 2f)
+    }
+
+    /** 로그아웃 — 문 밖으로 나가는 화살표 */
+    val LogOut: ImageVector by lazy {
+        strokeIcon(
+            "LogOut",
+            "M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4",
+            "M10 17l5-5-5-5",
+            "M15 12H3",
+            strokeWidth = 2f,
+        )
+    }
+
+    /** 화면 제목 왼쪽의 뒤로가기 화살표. 웹 쪽지함·알림함 헤더와 같다. */
+    val ArrowLeft: ImageVector by lazy {
+        strokeIcon("ArrowLeft", "M19 12H5", "M12 19l-7-7 7-7", strokeWidth = 2f)
+    }
+
+    /** 보내기 — 종이비행기 */
+    val Send: ImageVector by lazy {
+        strokeIcon("Send", "M4 12l16-8-6 16-2.5-6.5z", strokeWidth = 2.2f)
+    }
+
+    /** 안내 — 동그라미 안의 느낌표 */
+    val Info: ImageVector by lazy {
+        strokeIcon(
+            "Info",
+            "M3 12a9 9 0 1 0 18 0a9 9 0 1 0 -18 0",
+            "M12 11v5",
+            "M12 8h.01",
+            strokeWidth = 2f,
+        )
+    }
+
+    /** 긴급 신고 사이렌. 웹 Icon.jsx 의 'siren' 과 같은 경로다. */
+    val Siren: ImageVector by lazy {
+        strokeIcon(
+            "Siren",
+            "M7 18v-6a5 5 0 0 1 10 0v6",
+            "M4 21h16",
+            "M12 2v1.5",
+            "M21 12h-1.5",
+            "M4.5 12H3",
+            "M18.4 5.6l-1 1",
+            "M5.6 5.6l1 1",
+        )
+    }
+
+    /** 일반 화면으로 — 집 */
+    val Home: ImageVector by lazy {
+        strokeIcon(
+            "Home",
+            "M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z",
+            "M9 22V12h6v10",
+            strokeWidth = 2f,
+        )
+    }
+
+    // ── 관리자 콘솔 탭 ──────────────────────────────────────────────────────────
+    // 웹 adminNavItems.jsx 의 ADMIN_ICONS 와 같은 그림이다.
+    // `<rect rx>` 은 path 문법에 없어서 모서리를 호로 편 것이라 길지만 좌표는 원본 그대로다.
+
+    /** 대시보드 — 크기가 다른 네 칸 */
+    val AdminDashboard: ImageVector by lazy {
+        strokeIcon(
+            "AdminDashboard",
+            "M4.5 3h4a1.5 1.5 0 0 1 1.5 1.5v6a1.5 1.5 0 0 1-1.5 1.5h-4a1.5 1.5 0 0 1-1.5-1.5v-6a1.5 1.5 0 0 1 1.5-1.5z",
+            "M15.5 3h4a1.5 1.5 0 0 1 1.5 1.5v2a1.5 1.5 0 0 1-1.5 1.5h-4a1.5 1.5 0 0 1-1.5-1.5v-2a1.5 1.5 0 0 1 1.5-1.5z",
+            "M15.5 12h4a1.5 1.5 0 0 1 1.5 1.5v6a1.5 1.5 0 0 1-1.5 1.5h-4a1.5 1.5 0 0 1-1.5-1.5v-6a1.5 1.5 0 0 1 1.5-1.5z",
+            "M4.5 16h4a1.5 1.5 0 0 1 1.5 1.5v2a1.5 1.5 0 0 1-1.5 1.5h-4a1.5 1.5 0 0 1-1.5-1.5v-2a1.5 1.5 0 0 1 1.5-1.5z",
+        )
+    }
+
+    /** 신고 관리 — 접힌 문서 */
+    val AdminReports: ImageVector by lazy {
+        strokeIcon(
+            "AdminReports",
+            "M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z",
+            "M14 2v6h6",
+            "M9 13h6",
+            "M9 17h4",
+        )
+    }
+
+    /** 사용자 관리 — 두 사람 */
+    val AdminUsers: ImageVector by lazy {
+        strokeIcon(
+            "AdminUsers",
+            "M5.6 8a3.4 3.4 0 1 0 6.8 0a3.4 3.4 0 1 0 -6.8 0",
+            "M3.5 20a5.5 5.5 0 0 1 11 0",
+            "M16 11a3 3 0 0 0 0-6",
+            "M18.5 20a5.5 5.5 0 0 0-3-4.9",
+        )
+    }
+
+    /** 공지 — 확성기 */
+    val AdminNotices: ImageVector by lazy {
+        strokeIcon(
+            "AdminNotices",
+            "M3 11l18-5v12L3 14v-3z",
+            "M11.6 16.8A3 3 0 0 1 6 15.5",
+        )
+    }
+
+    /** 알림 벨 */
+    val Bell: ImageVector by lazy {
+        strokeIcon(
+            "Bell",
+            "M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9",
+            "M13.7 21a2 2 0 0 1-3.4 0",
+        )
+    }
 }

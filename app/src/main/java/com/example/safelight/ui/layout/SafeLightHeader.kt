@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
@@ -38,9 +39,9 @@ import com.example.safelight.ui.search.SearchedPlace
 import com.example.safelight.ui.theme.SafeLightTheme
 
 /**
- * 웹 MobileShell 의 헤더를 옮긴 것이다 — 로고 + 장소 검색 + 야간 모드.
+ * 웹 MobileShell 의 헤더를 옮긴 것이다 — 로고 + 장소 검색 + 알림 벨 + 야간 모드.
  *
- * 알림 벨은 웹에서도 로그인한 사용자에게만 보인다. 아직 로그인이 없어 자리를 비워 뒀다.
+ * 알림 벨은 웹과 같이 로그인한 사용자에게만 보인다.
  * 관리자 콘솔·로그인 버튼은 웹에서도 좁은 헤더에 넣지 않고 '내 정보'로 옮겼다.
  */
 
@@ -57,6 +58,10 @@ fun SafeLightHeader(
     onPickPlace: (SearchedPlace) -> Unit,
     night: Boolean,
     onToggleNight: () -> Unit,
+    loggedIn: Boolean,
+    unreadEmergency: Int,
+    unreadMessage: Int,
+    onOpenNotifications: () -> Unit,
 ) {
     val colors = SafeLightTheme.colors
     // 검색 결과 목록이 본문(지도) 위로 떠야 한다.
@@ -79,6 +84,13 @@ fun SafeLightHeader(
                     onSubmit = onSubmit,
                     modifier = Modifier.weight(1f),
                 )
+                if (loggedIn) {
+                    NotificationBell(
+                        emergency = unreadEmergency,
+                        message = unreadMessage,
+                        onClick = onOpenNotifications,
+                    )
+                }
                 NightModeButton(night = night, onToggle = onToggleNight)
             }
 
@@ -116,6 +128,68 @@ private fun Logo() {
             tint = Color.White,
             modifier = Modifier.size(20.dp),
         )
+    }
+}
+
+/**
+ * 알림 벨. 누르면 알림함으로 간다.
+ *
+ * 개수 뱃지가 아니라 점을 쓰는 이유는, 긴급과 쪽지가 섞이면 숫자 하나로는
+ * "지금 급한 일인지"를 알 수 없기 때문이다. 급한 건 색으로 먼저 보여야 한다.
+ *   긴급만 → 벨이 빨개지고 빨간 점 · 쪽지만 → 벨은 그대로, 파란 점만 · 둘 다 → 빨간 점 아래 파란 점
+ */
+@Composable
+private fun NotificationBell(emergency: Int, message: Int, onClick: () -> Unit) {
+    val colors = SafeLightTheme.colors
+    val urgent = emergency > 0 // 벨 색을 바꾸는 건 긴급뿐이다
+    val hasAny = urgent || message > 0
+    val label = if (!hasAny) "알림" else listOfNotNull(
+        "긴급 알림 ${emergency}건".takeIf { urgent },
+        "쪽지 ${message}건".takeIf { message > 0 },
+    ).joinToString(" · ")
+
+    Box(Modifier.size(CTRL)) {
+        Box(
+            Modifier
+                .size(CTRL)
+                .clip(CORNER)
+                .background(colors.surface)
+                .border(1.dp, if (urgent) colors.danger else colors.border, CORNER)
+                .clickable(onClick = onClick),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                SafeIcons.Bell,
+                contentDescription = label,
+                tint = if (urgent) colors.danger else colors.textMuted,
+                modifier = Modifier.size(17.dp),
+            )
+        }
+        if (hasAny) {
+            Column(
+                Modifier.align(Alignment.TopEnd).offset(x = 4.dp, y = (-4).dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(2.dp),
+            ) {
+                if (urgent) Dot(colors.danger)
+                if (message > 0) Dot(colors.bluePrimary)
+            }
+        }
+    }
+}
+
+/** 점 하나. 어느 배경에서도 뭉개지지 않게 표면색 테두리를 두른다. */
+@Composable
+private fun Dot(color: Color) {
+    val colors = SafeLightTheme.colors
+    Box(
+        Modifier
+            .size(12.dp)
+            .clip(RoundedCornerShape(6.dp))
+            .background(colors.surface),
+        contentAlignment = Alignment.Center,
+    ) {
+        Box(Modifier.size(8.dp).clip(RoundedCornerShape(4.dp)).background(color))
     }
 }
 
