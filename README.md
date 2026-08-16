@@ -91,3 +91,14 @@ adb reverse tcp:8080 tcp:8080
 - **지도 준비 여부는 상태로 들고 있어야 한다.** `arrayOfNulls` 홀더에 지도를 넣는 것만으로는 아무도 다시 그리지 않는다.
   `mapReady` 같은 상태를 `LaunchedEffect` 키에 넣지 않으면, 화면에 들어올 때 이미 정해져 있던 것(안내 중인 경로 등)이
   지도가 준비되기 전에 한 번 시도되고 끝나 영영 안 그려진다.
+- **실패 문구는 `error.message` 에 있다.** 백엔드 실패 봉투는 최상위 `message` 가 null 이고 진짜 문구는
+  `error.message` 에 담겨 온다. 그쪽을 먼저 보지 않으면 모든 실패가 호출한 쪽의 뭉뚱그린 문구로 덮인다
+  (`ApiEnvelope.kt` 의 `errorMessage`, 웹 `apiResponse.js` 의 `readEnvelope` 와 같은 순서다).
+- **첨부파일은 '다운로드' 폴더에 저장한다.** 웹의 브라우저 내려받기와 같은 자리다.
+  Android 10(Q)부터는 MediaStore 로 넣어 권한이 필요 없고, 그 아래에서만 `WRITE_EXTERNAL_STORAGE` 를 받아
+  공용 폴더에 직접 쓴다(그때는 다른 앱에 넘길 주소가 필요해 `FileProvider` 를 거친다).
+  올리는 쪽은 시스템 문서 선택기(`OpenMultipleDocuments`)이며, 웹의 드래그&드롭 자리에 해당한다.
+  허용 목록(jpg·jpeg·png·gif·webp·pdf·txt / 10MB)은 백엔드 `FileStorageService` 를 그대로 옮겼다 —
+  서버가 확장자와 MIME 을 **둘 다** 보므로 한쪽만 맞아도 400 이다.
+- **multipart 의 글자 조각에는 charset 을 붙인다.** 제목·내용·카테고리가 JSON 이 아니라 조각으로 가는데
+  (`@RequestParam`), `text/plain; charset=utf-8` 을 명시하지 않으면 한글이 깨진 채로 저장될 수 있다.

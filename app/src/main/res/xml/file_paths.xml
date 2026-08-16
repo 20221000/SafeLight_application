@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  FileProvider 가 내보낼 수 있는 폴더. Android 10 아래에서 내려받은 첨부파일을
+  다른 앱으로 열어 줄 때만 쓴다(그 위는 MediaStore 주소를 그대로 넘긴다).
+-->
+<paths>
+    <external-path
+        name="downloads"
+        path="Download/" />
+</paths>

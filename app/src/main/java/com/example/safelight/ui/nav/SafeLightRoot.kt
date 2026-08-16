@@ -18,16 +18,21 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavGraph.Companion.findStartDestination
+import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import androidx.navigation.navArgument
 import com.example.safelight.ui.auth.AuthViewModel
 import com.example.safelight.ui.auth.MyInfoScreen
+import com.example.safelight.ui.community.CommunityScreen
+import com.example.safelight.ui.community.CommunityViewModel
+import com.example.safelight.ui.community.PostDetailScreen
+import com.example.safelight.ui.community.PostWriteScreen
 import com.example.safelight.ui.layout.SafeLightHeader
 import com.example.safelight.ui.map.MapCameraState
 import com.example.safelight.ui.map.MapScreen
-import com.example.safelight.ui.placeholder.PlaceholderScreen
 import com.example.safelight.ui.route.ActiveRoute
 import com.example.safelight.ui.route.RouteScreen
 import com.example.safelight.ui.search.PlaceSearchViewModel
@@ -52,17 +57,24 @@ fun SafeLightRoot(night: Boolean, onToggleNight: () -> Unit) {
     val searchVm: PlaceSearchViewModel = viewModel()
     // 로그인 상태는 헤더(알림 벨)와 내 정보 탭이 같이 본다 — 그래서 여기서 한 번만 만든다.
     val authVm: AuthViewModel = viewModel()
+    // 커뮤니티 목록 상태(탭·정렬·페이지)는 글을 열었다 돌아와도 그대로여야 한다.
+    // 글쓰기·삭제 뒤에 목록을 다시 읽는 것도 여기서 부른다.
+    val communityVm: CommunityViewModel = viewModel()
+    // 글을 고치고 상세로 돌아왔을 때 다시 읽게 하는 표식. 값이 바뀌는 것 자체가 신호다.
+    var communityRevision by remember { mutableStateOf(0) }
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = backStackEntry?.destination?.route
 
-    fun goToMapTab() {
-        if (currentRoute == UserTab.Map.route) return
-        navController.navigate(UserTab.Map.route) {
+    fun goToTab(route: String) {
+        if (currentRoute == route) return
+        navController.navigate(route) {
             popUpTo(navController.graph.findStartDestination().id) { saveState = true }
             launchSingleTop = true
             restoreState = true
         }
     }
+
+    fun goToMapTab() = goToTab(UserTab.Map.route)
 
     fun pickPlace(place: SearchedPlace) {
         searchVm.onPicked(place)
@@ -93,7 +105,10 @@ fun SafeLightRoot(night: Boolean, onToggleNight: () -> Unit) {
             NavigationBar(containerColor = SafeLightTheme.colors.surface) {
                 UserTab.entries.forEach { tab ->
                     NavigationBarItem(
-                        selected = currentRoute == tab.route,
+                        // 게시글 상세·글쓰기처럼 탭 안에서 더 들어간 화면에서도 그 탭에 불이 켜져 있어야 한다
+                        // (웹도 UserShell 에 active="community" 를 그대로 넘긴다).
+                        selected = currentRoute == tab.route ||
+                            currentRoute?.startsWith("${tab.route}/") == true,
                         onClick = {
                             if (currentRoute == tab.route) return@NavigationBarItem
                             navController.navigate(tab.route) {
@@ -140,7 +155,64 @@ fun SafeLightRoot(night: Boolean, onToggleNight: () -> Unit) {
                     },
                 )
             }
-            composable(UserTab.Community.route) { PlaceholderScreen("커뮤니티", "게시글 목록·작성을 붙일 자리") }
+            composable(UserTab.Community.route) {
+                CommunityScreen(
+                    loggedIn = authVm.user != null,
+                    onOpenPost = { postId ->
+                        // 웹도 목록에서 글을 여는 순간 조회수를 올린다.
+                        communityVm.countView(postId)
+                        navController.navigate("community/post/$postId")
+                    },
+                    onWrite = { navController.navigate("community/write") },
+                    // 로그인 화면은 '내 정보' 탭이 들고 있다.
+                    onGoLogin = { goToTab(UserTab.MyInfo.route) },
+                    vm = communityVm,
+                )
+            }
+            composable(
+                "community/post/{postId}",
+                arguments = listOf(navArgument("postId") { type = NavType.LongType }),
+            ) { entry ->
+                val postId = entry.arguments?.getLong("postId") ?: 0L
+                PostDetailScreen(
+                    postId = postId,
+                    user = authVm.user,
+                    reloadKey = communityRevision,
+                    onBack = {
+                        // 글이 지워졌거나 댓글이 달렸을 수 있으니 목록도 다시 읽는다.
+                        communityVm.refresh()
+                        navController.popBackStack()
+                    },
+                    onEdit = { navController.navigate("community/edit/$it") },
+                    onGoLogin = { goToTab(UserTab.MyInfo.route) },
+                )
+            }
+            composable("community/write") {
+                PostWriteScreen(
+                    postId = null,
+                    user = authVm.user,
+                    onBack = { navController.popBackStack() },
+                    onSaved = {
+                        communityVm.refresh()
+                        navController.popBackStack()
+                    },
+                )
+            }
+            composable(
+                "community/edit/{postId}",
+                arguments = listOf(navArgument("postId") { type = NavType.LongType }),
+            ) { entry ->
+                PostWriteScreen(
+                    postId = entry.arguments?.getLong("postId"),
+                    user = authVm.user,
+                    onBack = { navController.popBackStack() },
+                    onSaved = {
+                        communityVm.refresh()
+                        communityRevision++
+                        navController.popBackStack()
+                    },
+                )
+            }
             composable(UserTab.MyInfo.route) { MyInfoScreen(authVm) }
         }
     }

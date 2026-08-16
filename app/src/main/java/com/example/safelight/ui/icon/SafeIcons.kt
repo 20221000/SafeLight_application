@@ -262,4 +262,94 @@ object SafeIcons {
             "M16.2 7.8 14.1 14.1 7.8 16.2 9.9 9.9Z",
         )
     }
+
+    // 아래는 커뮤니티 화면(웹 CommunityPage · PostDetailPage · PostWritePage)에서 쓰는 것들이다.
+
+    /** 조회수 — 눈 */
+    val Eye: ImageVector by lazy {
+        strokeIcon(
+            "Eye",
+            "M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z",
+            "M9 12a3 3 0 1 0 6 0a3 3 0 1 0 -6 0",
+        )
+    }
+
+    /** 좋아요 — 하트 */
+    val Heart: ImageVector by lazy {
+        strokeIcon(
+            "Heart",
+            "M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1-1.1a5.5 5.5 0 0 0-7.8 7.8l1 1L12 21.2l7.8-7.8 1-1a5.5 5.5 0 0 0 0-7.8z",
+        )
+    }
+
+    /** 댓글 — 말풍선. 하단 탭의 [Community] 와 달리 웹 'message' path 그대로다. */
+    val Message: ImageVector by lazy {
+        strokeIcon("Message", "M21 11.5a8 8 0 0 1-8.5 7.9L4 21l1.6-4.2A8 8 0 1 1 21 11.5z")
+    }
+
+    /** 인기글 — 불꽃 */
+    val Flame: ImageVector by lazy {
+        strokeIcon(
+            "Flame",
+            "M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.4-.5-2-1-3-1.1-2.1-.2-4 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.2.4-2.3 1-3a2.5 2.5 0 0 0 2.5 2.5z",
+        )
+    }
+
+    /** 조회 실패 — 경고 삼각형 */
+    val AlertTriangle: ImageVector by lazy {
+        strokeIcon(
+            "AlertTriangle",
+            "M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h16.9a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z",
+            "M12 9v4",
+            "M12 17h.01",
+        )
+    }
+
+    /** 첨부파일 — 클립 */
+    val Paperclip: ImageVector by lazy {
+        strokeIcon(
+            "Paperclip",
+            "M21.4 11.1l-9.2 9.2a6 6 0 0 1-8.5-8.5l9.2-9.2a4 4 0 0 1 5.7 5.7l-9.2 9.2a2 2 0 0 1-2.8-2.8l8.5-8.5",
+        )
+    }
+
+    /** 파일 */
+    val File: ImageVector by lazy {
+        strokeIcon("File", "M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z", "M14 2v6h6")
+    }
+
+    /** 공유 — 사슬 */
+    val Link: ImageVector by lazy {
+        strokeIcon(
+            "Link",
+            "M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.8 1.7",
+            "M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7",
+        )
+    }
+
+    /** 글쓰기 FAB — 더하기. 웹은 이 자리만 굵기 2.2 다. */
+    val Plus: ImageVector by lazy {
+        strokeIcon("Plus", "M12 5v14", "M5 12h14", strokeWidth = 2.2f)
+    }
+
+    /** 뒤로 — 왼쪽 꺾쇠. 웹 '목록으로' 버튼과 같은 굵기 2 다. */
+    val ChevronLeft: ImageVector by lazy {
+        strokeIcon("ChevronLeft", "M15 18l-6-6 6-6", strokeWidth = 2f)
+    }
+
+    /** 정렬 드롭다운 — 아래 꺾쇠 */
+    val ChevronDown: ImageVector by lazy {
+        strokeIcon("ChevronDown", "M6 9l6 6 6-6", strokeWidth = 2.4f)
+    }
+
+    /** 삭제 — 휴지통 */
+    val Trash: ImageVector by lazy {
+        strokeIcon(
+            "Trash",
+            "M3 6h18",
+            "M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2",
+            "M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6",
+            strokeWidth = 2f,
+        )
+    }
 }

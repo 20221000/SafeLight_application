@@ -7,6 +7,13 @@
     <!-- 지도의 현재 위치 · 긴급신고 위치 전송. 웹의 navigator.geolocation 자리다. -->
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <!--
+      첨부파일을 '다운로드' 폴더에 저장할 때. Android 10(Q)부터는 MediaStore 로 넣으므로
+      권한이 필요 없다 — 그래서 maxSdkVersion 으로 그 아래 기기에만 요청한다.
+    -->
+    <uses-permission
+        android:name="android.permission.WRITE_EXTERNAL_STORAGE"
+        android:maxSdkVersion="28" />
 
     <application
         android:name=".SafeLightApp"
@@ -31,6 +38,20 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!--
+          Android 10 아래에서 내려받은 첨부파일을 다른 앱으로 열어 줄 때 쓴다.
+          그 위 버전은 MediaStore 가 준 content:// 주소를 그대로 넘기므로 이 자리를 거치지 않는다.
+        -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
     </application>
 
 </manifest>
