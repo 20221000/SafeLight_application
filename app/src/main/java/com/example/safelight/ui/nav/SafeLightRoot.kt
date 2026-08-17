@@ -126,6 +126,8 @@ fun SafeLightRoot(night: Boolean, onToggleNight: () -> Unit) {
         // 뒤로가기는 탭 사이를 오가는 게 아니라 콘솔을 닫는 것이어야 한다.
         BackHandler { adminOpen = false }
         AdminRoot(
+            // 백엔드가 자기 자신의 권한·블랙리스트 변경을 막으므로 사용자 관리에서 미리 잠근다.
+            selfUserId = authVm.user?.userId,
             onExit = { adminOpen = false },
             onLogout = {
                 authVm.logout()

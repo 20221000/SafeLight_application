@@ -263,6 +263,95 @@ interface SafeLightApi {
     suspend fun getSharedLocation(
         @Path("reportId") reportId: Long,
     ): Response<ApiEnvelope<SharedLocationDto>>
+
+    // ── 관리자 ────────────────────────────────────────────────────────────────
+    /** 전체 회원. 응답 한 줄이 [UserProfileDto] 와 같은 모양이라 그대로 쓴다. */
+    @GET("users")
+    suspend fun getAllUsers(): Response<ApiEnvelope<List<UserProfileDto>>>
+
+    @GET("admin/dashboard/summary")
+    suspend fun getDashboardSummary(): Response<ApiEnvelope<DashboardSummaryDto>>
+
+    /**
+     * 관리자 신고 목록. 상태·기간·키워드를 **서버가** 거른다.
+     *
+     * [status] 와 [isFalseReport] 는 같이 쓰지 않는다 — '허위'는 상태가 아니라 플래그로 거른다
+     * (상태만 FALSE 로 바뀌는 경로가 따로 있어 플래그 쪽이 근거다).
+     * [size] 는 최대 100 이고 넘기면 400 이다.
+     * [startDate]·[endDate] 는 `2026-08-17T00:00:00` 형태여야 한다(날짜만 보내면 400).
+     */
+    @GET("admin/emergency-reports")
+    suspend fun getAdminReports(
+        @Query("page") page: Int,
+        @Query("size") size: Int,
+        @Query("status") status: String? = null,
+        @Query("isFalseReport") isFalseReport: Boolean? = null,
+        @Query("keyword") keyword: String? = null,
+        @Query("startDate") startDate: String? = null,
+        @Query("endDate") endDate: String? = null,
+    ): Response<ApiEnvelope<AdminReportPageDto>>
+
+    @PATCH("emergency-reports/{reportId}/status")
+    suspend fun setReportStatus(
+        @Path("reportId") reportId: Long,
+        @Body body: ReportStatusRequest,
+    ): Response<ApiEnvelope<EmergencyReportDto>>
+
+    /** 신고자 벌점 +1, 누적 3회면 자동 블랙리스트. 위험구역 집계도 다시 돈다. */
+    @PATCH("emergency-reports/{reportId}/false-report")
+    suspend fun markFalseReport(
+        @Path("reportId") reportId: Long,
+    ): Response<ApiEnvelope<EmergencyReportDto>>
+
+    /**
+     * 허위신고 되돌리기. 이 경로로만 된다 —
+     * `PATCH /status` 로 RECEIVED 를 보내면 서버가 400 이다(벌점·블랙리스트가 남기 때문).
+     */
+    @PATCH("emergency-reports/{reportId}/false-report/cancel")
+    suspend fun cancelFalseReport(
+        @Path("reportId") reportId: Long,
+    ): Response<ApiEnvelope<EmergencyReportDto>>
+
+    /** 자기 자신의 권한·블랙리스트는 백엔드가 막는다(SecurityException). 화면에서 미리 잠근다. */
+    @PATCH("admin/users/{userId}/status")
+    suspend fun setUserStatus(
+        @Path("userId") userId: Long,
+        @Body body: UserStatusRequest,
+    ): Response<ApiEnvelope<UserStatusResultDto>>
+
+    // 회원 정보 수정·삭제는 관리자도 같은 경로를 쓴다 — [updateProfile]·[withdraw] 를 그대로 부른다.
+
+    @PATCH("danger-zones/{dangerZoneId}/level")
+    suspend fun setDangerLevel(
+        @Path("dangerZoneId") dangerZoneId: Long,
+        @Body body: DangerLevelRequest,
+    ): Response<ApiEnvelope<DangerZoneDto>>
+
+    @PATCH("danger-zones/{dangerZoneId}/deactivate")
+    suspend fun deactivateDangerZone(
+        @Path("dangerZoneId") dangerZoneId: Long,
+    ): Response<ApiEnvelope<DangerZoneDto>>
+
+    /** 구역 상세에는 신고 목록이 없다. 이걸 따로 받아 합쳐야 신고 내역이 나온다. */
+    @GET("danger-zones/{dangerZoneId}/reports")
+    suspend fun getZoneReports(
+        @Path("dangerZoneId") dangerZoneId: Long,
+    ): Response<ApiEnvelope<List<EmergencyReportDto>>>
+
+    /**
+     * 공지 작성. 일반 글 경로로 우회하면 `isNotice=false` 로 저장돼 상단 공지에 뜨지 않는다.
+     * 작성자는 백엔드가 토큰에서 읽는다.
+     */
+    @POST("posts/admin/notices")
+    suspend fun createNotice(@Body body: NoticeCreateRequest): Response<ApiEnvelope<JsonElement>>
+
+    @Multipart
+    @POST("posts/admin/notices/with-files")
+    suspend fun createNoticeWithFiles(
+        @Part("title") title: RequestBody,
+        @Part("content") content: RequestBody,
+        @Part files: List<MultipartBody.Part>,
+    ): Response<ApiEnvelope<JsonElement>>
 }
 
 @Serializable
@@ -274,6 +363,13 @@ data class CctvDto(
     val purpose: String = "",
 )
 
+/**
+ * 위험구역 하나. 목록 API 는 아직 만료되지 않은 활성 구역만 내려준다.
+ *
+ * [expiredAt] 은 긴급신고로 만들어질 때 '생성 + 24시간' 으로 박히므로 늘 '자동 해제 예정 시각'이다
+ * (관리자가 직접 비활성화하면 그 시각으로 바뀌고 목록에서 빠진다).
+ * 중심 좌표는 백엔드가 소수 3자리로 반올림해 내려준다.
+ */
 @Serializable
 data class DangerZoneDto(
     val dangerZoneId: Long = 0,
@@ -284,6 +380,9 @@ data class DangerZoneDto(
     /** HIGH · MEDIUM · LOW */
     val dangerLevel: String = "LOW",
     val isActive: Boolean = true,
+    val reportCount: Int = 0,
+    val createdAt: String? = null,
+    val expiredAt: String? = null,
 )
 
 /** 위경도 한 쌍. 백엔드 LocationDto 와 같다(경로 좌표·시설 좌표에 두루 쓰인다). */
@@ -621,5 +720,64 @@ data class CommentCreateRequest(
 
 @Serializable
 data class CommentUpdateRequest(
+    val content: String,
+)
+
+// ── 관리자 ────────────────────────────────────────────────────────────────────
+
+/** 게시글 집계. 사용자·구역 수는 각 목록 길이로도 세지만 게시글은 이것 말고는 셀 방법이 없다. */
+@Serializable
+data class DashboardSummaryDto(
+    val totalPosts: Long = 0,
+    val todayPosts: Long = 0,
+    val totalUsers: Long = 0,
+)
+
+/** 관리자 신고 목록 한 장. [totalElements] 는 페이지와 무관한 전체 건수다. */
+@Serializable
+data class AdminReportPageDto(
+    val reports: List<EmergencyReportDto> = emptyList(),
+    val page: Int = 0,
+    val size: Int = 0,
+    val totalElements: Long = 0,
+    val totalPages: Int = 0,
+    val first: Boolean = true,
+    val last: Boolean = true,
+)
+
+@Serializable
+data class ReportStatusRequest(
+    /** RECEIVED · RESOLVED */
+    val reportStatus: String,
+)
+
+/** 권한과 블랙리스트를 한 경로로 바꾼다. 바꿀 쪽만 담고 나머지는 null 로 둔다. */
+@Serializable
+data class UserStatusRequest(
+    val role: String? = null,
+    val isBlacklisted: Boolean? = null,
+)
+
+/** [requiresRelogin] 이 true 면 대상자가 다시 로그인해야 토큰에 권한이 반영된다. */
+@Serializable
+data class UserStatusResultDto(
+    val userId: Long = 0,
+    val username: String = "",
+    val nickname: String = "",
+    val role: String = "USER",
+    val isBlacklisted: Boolean = false,
+    val falseReportCount: Int = 0,
+    val requiresRelogin: Boolean = false,
+)
+
+@Serializable
+data class DangerLevelRequest(
+    /** HIGH · MEDIUM · LOW */
+    val dangerLevel: String,
+)
+
+@Serializable
+data class NoticeCreateRequest(
+    val title: String,
     val content: String,
 )
