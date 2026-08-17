@@ -190,6 +190,17 @@ interface SafeLightApi {
     @GET("emergency-reports/my")
     suspend fun getMyReports(): Response<ApiEnvelope<List<EmergencyReportDto>>>
 
+    /**
+     * 긴급 신고(SOS). 신고자는 백엔드가 토큰에서 읽는다.
+     *
+     * 한 번 부르면 되돌릴 수 없다 — 신고가 남고, 반경 300m 위험구역이 생기거나 갱신되며,
+     * 위치 공유를 허용한 친구들에게 알림이 나간다. 블랙리스트 사용자는 400 이다.
+     */
+    @POST("emergency-reports")
+    suspend fun createEmergencyReport(
+        @Body body: EmergencyReportCreateRequest,
+    ): Response<ApiEnvelope<EmergencyReportDto>>
+
     @GET("messages/unread-count")
     suspend fun getUnreadMessageCount(): Response<ApiEnvelope<UnreadCountDto>>
 
@@ -605,6 +616,14 @@ data class EmergencyReportDto(
     val dangerLevel: String? = null,
     val nearestCctv: CctvDto? = null,
     val reportedAt: String = "",
+)
+
+/** 긴급 신고 접수. 위치는 필수이고 [description] 은 웹과 같이 '긴급 신고' 한 마디를 보낸다. */
+@Serializable
+data class EmergencyReportCreateRequest(
+    val latitude: Double,
+    val longitude: Double,
+    val description: String? = null,
 )
 
 /** `{ unreadCount }` 한 줄짜리 응답. 쪽지·알림이 같은 모양이다. */

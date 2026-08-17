@@ -197,6 +197,9 @@ fun SafeLightRoot(night: Boolean, onToggleNight: () -> Unit) {
                     searchTarget = searchTarget,
                     activeRoute = activeRoute,
                     onCancelRoute = { askCancelRoute = true },
+                    // SOS 는 계정에 붙는다 — 담당자가 연락하고 친구에게 위치가 가야 하기 때문이다.
+                    loggedIn = authVm.user != null,
+                    onNeedLogin = { goToTab(UserTab.MyInfo.route) },
                 )
             }
             composable(UserTab.Route.route) {

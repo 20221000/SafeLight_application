@@ -51,6 +51,7 @@ import com.example.safelight.ui.icon.SafeIcons
 import com.example.safelight.ui.layout.DragSheet
 import com.example.safelight.ui.layout.DragSheetState
 import com.example.safelight.ui.layout.rememberDragSheetState
+import com.example.safelight.ui.sos.SosButton
 import com.example.safelight.ui.route.ActiveRoute
 import com.example.safelight.ui.search.SearchedPlace
 import com.example.safelight.ui.theme.SafeLightTheme
@@ -80,6 +81,9 @@ fun MapScreen(
     searchTarget: SearchedPlace? = null,
     activeRoute: ActiveRoute? = null,
     onCancelRoute: () -> Unit = {},
+    /** SOS 는 계정에 붙는다. 로그인하지 않았으면 누를 때 로그인 화면으로 보낸다(웹과 같다). */
+    loggedIn: Boolean = true,
+    onNeedLogin: () -> Unit = {},
     vm: MapViewModel = viewModel(),
 ) {
     val context = LocalContext.current
@@ -282,6 +286,14 @@ fun MapScreen(
                 }
             }
         }
+
+        // ── 긴급 SOS ────────────────────────────────────────────────────────
+        // 지도 중앙 하단의 상시 버튼. 시트가 가리는 만큼 위로 피한다(웹과 같다).
+        SosButton(
+            loggedIn = loggedIn,
+            onNeedLogin = onNeedLogin,
+            bottomPadding = with(LocalDensity.current) { sheet.peekPx.toDp() },
+        )
 
         // ── 내 주변 안전 현황 (바텀시트) ─────────────────────────────────────
         // 웹은 MobileShell 이 rightDrawer(RightPanel)를 시트로 내려준다. 데스크탑의 320px

@@ -44,6 +44,12 @@ import kotlin.math.abs
 /** 핸들 바만 남은 높이. 웹 BottomSheet 의 SHEET_COLLAPSED 와 같다. */
 val SHEET_COLLAPSED = 26.dp
 
+/**
+ * 제목 블록을 아직 재기 전에 쓰는 mid 높이. 웹 `SHEET_PEEK` 과 같은 132 이다.
+ * 이 값이 없으면 첫 그림에서 시트가 핸들만 남은 채로 한 번 깜빡인다(머리말 높이가 0이라 mid == collapsed).
+ */
+private val SHEET_PEEK = 132.dp
+
 /** 다 올렸을 때 화면에서 차지하는 비율(웹 useDragSheet 의 fullRatio). */
 private const val FULL_RATIO = 0.92f
 
@@ -64,6 +70,7 @@ private const val SNAP_MS = 240
 @Stable
 class DragSheetState(
     private val collapsedPx: Float,
+    private val fallbackMidPx: Float,
     private val scope: CoroutineScope,
 ) {
 
@@ -76,7 +83,8 @@ class DragSheetState(
     /** 스냅 애니메이션. 다음 손짓이 오면 즉시 끊는다. */
     private var snap: Job? = null
 
-    val midPx: Float get() = collapsedPx + headHeightPx
+    val midPx: Float
+        get() = if (headHeightPx > 0f) collapsedPx + headHeightPx else fallbackMidPx
     val fullPx: Float get() = maxOf(midPx, containerHeightPx * FULL_RATIO)
     val currentPx: Float get() = (if (heightPx.isNaN()) midPx else heightPx).coerceIn(collapsedPx, fullPx)
     val isFull: Boolean get() = containerHeightPx > 0f && currentPx >= fullPx - 2f
@@ -117,9 +125,11 @@ class DragSheetState(
 
 @Composable
 fun rememberDragSheetState(): DragSheetState {
-    val collapsedPx = with(LocalDensity.current) { SHEET_COLLAPSED.toPx() }
+    val density = LocalDensity.current
+    val collapsedPx = with(density) { SHEET_COLLAPSED.toPx() }
+    val peekPx = with(density) { SHEET_PEEK.toPx() }
     val scope = rememberCoroutineScope()
-    return remember(collapsedPx, scope) { DragSheetState(collapsedPx, scope) }
+    return remember(collapsedPx, peekPx, scope) { DragSheetState(collapsedPx, peekPx, scope) }
 }
 
 /** 한 번의 드래그가 무엇을 하는지. 웹처럼 제스처가 시작될 때 정하고 끝날 때까지 바꾸지 않는다. */
