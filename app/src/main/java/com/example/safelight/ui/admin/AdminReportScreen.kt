@@ -47,6 +47,22 @@ import com.example.safelight.ui.theme.SafeLightTheme
 import com.kakao.vectormap.LatLng
 import java.util.Calendar
 
+// 허위신고를 묻는 문구. 위험 구역 화면의 신고 내역에서도 같은 처리를 하므로 여기 한 곳에 둔다 —
+// 같은 일을 화면마다 다르게 설명하면 어느 쪽이 진짜인지 알 수 없다(웹 ConfirmDialog 와 같은 말이다).
+
+fun markFalseTitle(reportId: Long) = "신고 #ER-$reportId 을(를) 허위신고로 확정합니다"
+
+const val MARK_FALSE_MESSAGE =
+    "신고자의 허위신고 횟수가 1 올라가고, 누적 3회가 되면 자동으로 블랙리스트에 들어갑니다. " +
+        "이 신고로 잡혀 있던 위험구역도 다시 계산됩니다. 잘못 눌렀다면 같은 자리에서 취소할 수 있습니다."
+
+fun cancelFalseTitle(reportId: Long) = "신고 #ER-$reportId 의 허위신고를 취소합니다"
+
+const val CANCEL_FALSE_MESSAGE =
+    "상태가 접수됨으로 돌아가고, 신고자의 허위신고 횟수가 1 내려갑니다. " +
+        "그 결과 3회 미만이 되면 블랙리스트도 함께 풀립니다. " +
+        "위험구역은 신고 후 24시간이 지났으면 다시 살아나지 않습니다."
+
 /**
  * 신고 관리. 웹 AdminReportPage 의 모바일 배치를 옮겼다 —
  * 데스크탑 표 대신 카드 목록, 상태 필터는 건수를 단 칩, 처리는 아래에서 올라오는 시트.
@@ -199,26 +215,23 @@ fun AdminReportScreen(
     // 허위신고는 신고자에게 벌점이 붙고 위험구역 집계까지 다시 도는 무거운 처리라
     // 되돌릴 수 있는 지금도 누르기 전에 한 번 묻는다.
     confirmFalse?.let { report ->
-        ConfirmSheet(
-            title = "신고 #ER-${report.reportId} 을(를) 허위신고로 확정합니다",
-            message = "신고자의 허위신고 횟수가 1 올라가고, 누적 3회가 되면 자동으로 블랙리스트에 " +
-                "들어갑니다. 이 신고로 잡혀 있던 위험구역도 다시 계산됩니다. " +
-                "잘못 눌렀다면 같은 메뉴에서 취소할 수 있습니다.",
+        AdminConfirmDialog(
+            title = markFalseTitle(report.reportId),
+            message = MARK_FALSE_MESSAGE,
             confirmLabel = "허위신고로 확정",
             danger = true,
+            dismissLabel = "닫기",
             onConfirm = { vm.markFalse(report); confirmFalse = null },
             onDismiss = { confirmFalse = null },
         )
     }
 
     confirmUnfalse?.let { report ->
-        ConfirmSheet(
-            title = "신고 #ER-${report.reportId} 의 허위신고를 취소합니다",
-            message = "상태가 접수됨으로 돌아가고, 신고자의 허위신고 횟수가 1 내려갑니다. " +
-                "그 결과 3회 미만이 되면 블랙리스트도 함께 풀립니다. " +
-                "위험구역은 신고 후 24시간이 지났으면 다시 살아나지 않습니다.",
+        AdminConfirmDialog(
+            title = cancelFalseTitle(report.reportId),
+            message = CANCEL_FALSE_MESSAGE,
             confirmLabel = "허위신고 취소",
-            danger = false,
+            dismissLabel = "닫기",
             onConfirm = { vm.cancelFalse(report); confirmUnfalse = null },
             onDismiss = { confirmUnfalse = null },
         )
@@ -438,33 +451,6 @@ private fun DateBox(
             maxLines = 1,
         )
     }
-}
-
-/** 무게가 있는 결정을 묻는 창. 웹 ConfirmDialog 와 같은 문구를 쓴다. */
-@Composable
-private fun ConfirmSheet(
-    title: String,
-    message: String,
-    confirmLabel: String,
-    danger: Boolean,
-    onConfirm: () -> Unit,
-    onDismiss: () -> Unit,
-) {
-    val colors = SafeLightTheme.colors
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(title, fontSize = 16.sp, fontWeight = FontWeight.ExtraBold) },
-        text = { Text(message, fontSize = 13.5.sp, lineHeight = 21.sp) },
-        confirmButton = {
-            TextButton(onClick = onConfirm) {
-                Text(confirmLabel, color = if (danger) colors.danger else colors.bluePrimary)
-            }
-        },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("닫기") } },
-        containerColor = colors.surface,
-        titleContentColor = colors.textStrong,
-        textContentColor = colors.textMuted,
-    )
 }
 
 @Composable

@@ -56,7 +56,8 @@ fun AdminUserScreen(
     val colors = SafeLightTheme.colors
     val snackbar = remember { SnackbarHostState() }
     var sheetUser by remember { mutableStateOf<UserProfileDto?>(null) }
-    var confirmDelete by remember { mutableStateOf<UserProfileDto?>(null) }
+    // 블랙리스트·권한·삭제는 되돌리는 값이 서로 달라서 확인창 하나에 무엇을 물을지만 담아 넘긴다.
+    var confirm by remember { mutableStateOf<UserConfirm?>(null) }
 
     LaunchedEffect(Unit) { vm.start() }
     LaunchedEffect(vm.message) {
@@ -111,8 +112,9 @@ fun AdminUserScreen(
 
     sheetUser?.let { user ->
         val isSelf = selfUserId != null && user.userId == selfUserId
+        val name = user.nickname.ifBlank { user.username }
         AdminActionSheet(
-            title = user.nickname.ifBlank { user.username },
+            title = name,
             subtitle = "@${user.username} · #${user.userId}",
             actions = listOf(
                 SheetAction("정보 수정", ActionTone.Primary) { vm.openEdit(user) },
@@ -121,46 +123,92 @@ fun AdminUserScreen(
                     tone = if (user.isBlacklisted) ActionTone.Safe else ActionTone.Danger,
                     enabled = !isSelf,
                     caption = "본인 계정에는 쓸 수 없습니다".takeIf { isSelf },
-                    onClick = { vm.toggleBlacklist(user) },
+                    onClick = { confirm = blacklistConfirm(name, user) { vm.toggleBlacklist(user) } },
                 ),
                 SheetAction(
                     label = if (user.role == "ADMIN") "일반 사용자로 변경" else "관리자로 변경",
                     enabled = !isSelf,
                     caption = "본인 권한은 바꿀 수 없습니다".takeIf { isSelf },
-                    onClick = { vm.changeRole(user, if (user.role == "ADMIN") "USER" else "ADMIN") },
+                    onClick = {
+                        val next = if (user.role == "ADMIN") "USER" else "ADMIN"
+                        confirm = roleConfirm(name, next) { vm.changeRole(user, next) }
+                    },
                 ),
                 SheetAction(
                     label = "사용자 삭제",
                     tone = ActionTone.Danger,
                     enabled = user.role != "ADMIN",
                     caption = "먼저 일반 사용자로 내려야 합니다".takeIf { user.role == "ADMIN" },
-                    onClick = { confirmDelete = user },
+                    onClick = { confirm = deleteConfirm(name) { vm.deleteUser(user) } },
                 ),
             ),
             onClose = { sheetUser = null },
         )
     }
 
-    confirmDelete?.let { user ->
-        AlertDialog(
-            onDismissRequest = { confirmDelete = null },
-            title = { Text("'${user.nickname}' 사용자를 삭제할까요?") },
-            text = { Text("되돌릴 수 없습니다.") },
-            confirmButton = {
-                TextButton(onClick = {
-                    vm.deleteUser(user)
-                    confirmDelete = null
-                }) { Text("삭제", color = colors.danger) }
-            },
-            dismissButton = { TextButton(onClick = { confirmDelete = null }) { Text("취소") } },
-            containerColor = colors.surface,
-            titleContentColor = colors.textStrong,
-            textContentColor = colors.textMuted,
+    confirm?.let { pending ->
+        AdminConfirmDialog(
+            title = pending.title,
+            message = pending.message,
+            confirmLabel = pending.confirmLabel,
+            danger = pending.danger,
+            onConfirm = { pending.run(); confirm = null },
+            onDismiss = { confirm = null },
         )
     }
 
     vm.editing?.let { user -> EditDialog(user, vm) }
 }
+
+/** 확인창에 띄울 내용 한 벌. 셋 다 되돌리는 값이 달라 문구를 각자 들고 온다. */
+private data class UserConfirm(
+    val title: String,
+    val message: String,
+    val confirmLabel: String,
+    val danger: Boolean,
+    val run: () -> Unit,
+)
+
+/**
+ * 블랙리스트는 그 사람이 긴급신고를 못 하게 막는 처리다(백엔드 EmergencyReportService).
+ * 그래서 무엇이 막히는지를 적는다 — '정말 하시겠습니까'로는 무게를 알 수 없다.
+ */
+private fun blacklistConfirm(name: String, user: UserProfileDto, run: () -> Unit): UserConfirm =
+    if (user.isBlacklisted) UserConfirm(
+        title = "'$name' 의 블랙리스트를 해제할까요?",
+        // 해제해도 허위신고 횟수는 그대로다. 3회 이상인 사람은 다음 한 건에 다시 걸린다.
+        message = "다시 긴급신고를 할 수 있게 됩니다. 허위신고 횟수(${user.falseReportCount}회)는 " +
+            "그대로 남아, 3회 이상이면 다음 허위신고에 곧바로 다시 블랙리스트가 됩니다.",
+        confirmLabel = "해제",
+        danger = false,
+        run = run,
+    ) else UserConfirm(
+        title = "'$name' 을(를) 블랙리스트에 등록할까요?",
+        message = "이 사용자는 긴급신고를 할 수 없게 됩니다. 나머지 기능은 그대로 쓸 수 있고, " +
+            "같은 자리에서 해제할 수 있습니다.",
+        confirmLabel = "블랙리스트 등록",
+        danger = true,
+        run = run,
+    )
+
+private fun roleConfirm(name: String, role: String, run: () -> Unit) = UserConfirm(
+    title = "'$name' 의 권한을 $role 로 바꿀까요?",
+    message = if (role == "ADMIN")
+        "관리자 콘솔 전체를 쓸 수 있게 됩니다 — 신고 처리, 사용자 관리, 공지까지. " +
+            "권한은 토큰에 박혀 있어 그 사용자가 다시 로그인해야 적용됩니다."
+    else "관리자 콘솔에 들어갈 수 없게 됩니다. 그 사용자가 다시 로그인해야 적용됩니다.",
+    confirmLabel = "권한 변경",
+    danger = role != "ADMIN",
+    run = run,
+)
+
+private fun deleteConfirm(name: String, run: () -> Unit) = UserConfirm(
+    title = "'$name' 사용자를 삭제할까요?",
+    message = "되돌릴 수 없습니다.",
+    confirmLabel = "삭제",
+    danger = true,
+    run = run,
+)
 
 @Composable
 private fun UserCard(user: UserProfileDto, onManage: () -> Unit) {

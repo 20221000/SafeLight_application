@@ -139,20 +139,25 @@ class MapLayers(
     /**
      * 위험구역 — 반투명 원 + 위험도 배지.
      * 웹: strokeWeight 2 · strokeOpacity .9 · fillOpacity .15
+     *
+     * [selectedId] 는 관리자 화면에서 고른 구역이다. 웹과 같이 테두리를 굵게, 채움을 진하게
+     * 준다 — 원은 늘 전부 그린다. 고른 것만 그리면 지도를 옮겨 다른 구역 자리에 갔을 때
+     * 아무것도 없는 빈 지도가 된다.
      */
-    fun drawDangerZones(zones: List<DangerZoneDto>) {
+    fun drawDangerZones(zones: List<DangerZoneDto>, selectedId: Long? = null) {
         dangerShapes?.removeAll()
         dangerBadges?.removeAll()
         if (zones.isEmpty()) return
 
         zones.forEach { zone ->
             val color = dangerLevelColor(zone.dangerLevel)
+            val picked = zone.dangerZoneId == selectedId
             dangerShapes?.addPolygon(
                 PolygonOptions.from(
                     circlePoints(zone.centerLatitude, zone.centerLongitude, zone.radius),
                     PolygonStyles.from(
-                        color.copy(alpha = 0.15f).toArgb(),
-                        2f * density,
+                        color.copy(alpha = if (picked) 0.3f else 0.15f).toArgb(),
+                        (if (picked) 4f else 2f) * density,
                         color.copy(alpha = 0.9f).toArgb(),
                     ),
                 ),

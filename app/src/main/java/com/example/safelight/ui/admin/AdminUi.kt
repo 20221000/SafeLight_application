@@ -18,11 +18,13 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -370,6 +372,41 @@ fun AdminActionSheet(
             }
         }
     }
+}
+
+/**
+ * 되돌리기 어려운 처리를 묻는 창. 웹 ConfirmDialog(그리고 그쪽 `window.confirm`) 자리다.
+ *
+ * 관리자 화면의 확인은 전부 이 하나를 쓴다 — 같은 무게의 처리가 화면에 따라 묻기도 하고
+ * 안 묻기도 하면 어느 쪽이 진짜인지 알 수 없다.
+ *
+ * [message] 에는 '정말 하시겠습니까'가 아니라 **무엇이 따라오는지**를 적는다.
+ */
+@Composable
+fun AdminConfirmDialog(
+    title: String,
+    message: String,
+    confirmLabel: String,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit,
+    danger: Boolean = false,
+    dismissLabel: String = "취소",
+) {
+    val colors = SafeLightTheme.colors
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(title, fontSize = 16.sp, fontWeight = FontWeight.ExtraBold) },
+        text = { Text(message, fontSize = 13.5.sp, lineHeight = 21.sp) },
+        confirmButton = {
+            TextButton(onClick = onConfirm) {
+                Text(confirmLabel, color = if (danger) colors.danger else colors.bluePrimary)
+            }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(dismissLabel) } },
+        containerColor = colors.surface,
+        titleContentColor = colors.textStrong,
+        textContentColor = colors.textMuted,
+    )
 }
 
 /** 카드 아래 나란히 놓는 버튼. 눌리는 자리가 44 아래로 내려가지 않게 한다. */
