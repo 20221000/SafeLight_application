@@ -12,11 +12,15 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
@@ -33,14 +37,20 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.safelight.data.net.DangerZoneDto
 import com.example.safelight.ui.icon.SafeIcons
+import com.example.safelight.ui.layout.DragSheet
+import com.example.safelight.ui.layout.DragSheetState
+import com.example.safelight.ui.layout.rememberDragSheetState
 import com.example.safelight.ui.route.ActiveRoute
 import com.example.safelight.ui.search.SearchedPlace
 import com.example.safelight.ui.theme.SafeLightTheme
@@ -74,6 +84,7 @@ fun MapScreen(
 ) {
     val context = LocalContext.current
     val density = LocalDensity.current.density
+    val sheet = rememberDragSheetState()
     // 화면을 떠날 때 카메라를 읽어 저장해야 하므로 준비된 지도를 붙들어 둔다.
     val mapHolder = remember { arrayOfNulls<KakaoMap>(1) }
     val layersHolder = remember { arrayOfNulls<MapLayers>(1) }
@@ -96,7 +107,12 @@ fun MapScreen(
     val locationPermission = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission(),
     ) { granted ->
-        if (granted) moveToMyLocation(context, mapHolder[0], layersHolder[0], recenter = true)
+        if (granted) {
+            moveToMyLocation(
+                context, mapHolder[0], layersHolder[0],
+                recenter = true, onLocation = vm::onLocationKnown,
+            )
+        }
     }
 
     // 뷰모델이 새로 계산할 때마다 지도에 다시 그린다(웹의 useEffect 자리).
@@ -108,6 +124,13 @@ fun MapScreen(
     }
     LaunchedEffect(vm.dangerZones, mapReady) {
         layersHolder[0]?.drawDangerZones(vm.dangerZones)
+    }
+
+    // 시트가 지도 아래를 덮는다. 그만큼을 지도에 알려 두면 검색 핀·경로 맞추기가 알아서
+    // 보정된다 — 알리지 않으면 찍은 핀이 시트 뒤에 숨는다(경로 화면과 같은 처리다).
+    val mapBottomPaddingPx = sheet.peekPx.toInt()
+    LaunchedEffect(mapBottomPaddingPx, mapReady) {
+        mapHolder[0]?.setPadding(0, 0, 0, mapBottomPaddingPx)
     }
 
     // 헤더에서 장소를 고르면 그 자리로 옮기고 핀을 꽂는다(웹 MapView 의 searchTarget effect).
@@ -139,7 +162,11 @@ fun MapScreen(
         mapHolder[0]?.fitToRoute(route, (ROUTE_FIT_PADDING_DP * density).toInt())
     }
 
-    Box(modifier.fillMaxSize()) {
+    Box(
+        modifier
+            .fillMaxSize()
+            .onSizeChanged { sheet.containerHeightPx = it.height.toFloat() },
+    ) {
         KakaoMapHost(
             initialPosition = LatLng.from(camera.latitude, camera.longitude),
             initialZoom = camera.zoom,
@@ -157,6 +184,7 @@ fun MapScreen(
                     moveToMyLocation(
                         context, kakaoMap, layers,
                         recenter = untouched && activeRoute == null,
+                        onLocation = vm::onLocationKnown,
                     )
                 } else {
                     locationPermission.launch(Manifest.permission.ACCESS_FINE_LOCATION)
@@ -206,10 +234,13 @@ fun MapScreen(
         }
 
         // ── 현재 위치 버튼 · 줌 컨트롤 (우하단) ────────────────────────────────
+        // 시트가 가리는 만큼 위로 피한다. 시트를 다 올려도 mid 까지만 따라 올라간다
+        // (웹의 --ls-sheet-peek 과 같은 값이다).
         Column(
             modifier = Modifier
                 .align(Alignment.BottomEnd)
-                .padding(end = 20.dp, bottom = 20.dp),
+                .padding(end = 20.dp)
+                .padding(bottom = with(LocalDensity.current) { sheet.peekPx.toDp() } + 20.dp),
             horizontalAlignment = Alignment.End,
             verticalArrangement = Arrangement.spacedBy(28.dp),   // 웹: 현재위치 bottom 108 / 줌 bottom 20
         ) {
@@ -217,7 +248,10 @@ fun MapScreen(
                 MapControlButton(
                     onClick = {
                         if (context.hasLocationPermission()) {
-                            moveToMyLocation(context, mapHolder[0], layersHolder[0], recenter = true)
+                            moveToMyLocation(
+                                context, mapHolder[0], layersHolder[0],
+                                recenter = true, onLocation = vm::onLocationKnown,
+                            )
                         } else {
                             locationPermission.launch(Manifest.permission.ACCESS_FINE_LOCATION)
                         }
@@ -246,6 +280,159 @@ fun MapScreen(
                         Text("−", fontSize = 19.sp, color = SafeLightTheme.colors.textStrong)
                     }
                 }
+            }
+        }
+
+        // ── 내 주변 안전 현황 (바텀시트) ─────────────────────────────────────
+        // 웹은 MobileShell 이 rightDrawer(RightPanel)를 시트로 내려준다. 데스크탑의 320px
+        // 우측 패널 자리이며, 지도만 있고 이 시트가 없으면 활성 위험구역이 몇 건인지
+        // 목록으로는 볼 방법이 없다(지도 위 원을 눈으로 세는 수밖에 없다).
+        SafetySheet(
+            sheet = sheet,
+            zones = vm.dangerZones,
+            region = vm.regionName,
+            loading = vm.zonesLoading,
+            modifier = Modifier.align(Alignment.BottomCenter),
+        )
+    }
+}
+
+/** 웹 RightPanel 의 내용. 머리말(제목 블록)이 시트의 mid 높이가 된다. */
+@Composable
+private fun SafetySheet(
+    sheet: DragSheetState,
+    zones: List<DangerZoneDto>,
+    region: String?,
+    loading: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    val colors = SafeLightTheme.colors
+    DragSheet(
+        state = sheet,
+        modifier = modifier,
+        head = {
+            Row(
+                Modifier.fillMaxWidth().padding(start = 18.dp, end = 18.dp, top = 2.dp, bottom = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        "내 주변 안전 현황",
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = colors.textStrong,
+                    )
+                    Text(
+                        "반경 500m" + (region?.let { " · $it" } ?: ""),
+                        fontSize = 11.5.sp,
+                        color = colors.textMuted,
+                        modifier = Modifier.padding(top = 2.dp),
+                    )
+                }
+                Row(
+                    Modifier
+                        .clip(RoundedCornerShape(20.dp))
+                        .background(colors.safe.copy(alpha = .12f))
+                        .padding(horizontal = 9.dp, vertical = 5.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(5.dp),
+                ) {
+                    Box(Modifier.size(6.dp).clip(CircleShape).background(colors.safe))
+                    Text(
+                        if (loading) "갱신중" else "LIVE",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = colors.safe,
+                    )
+                }
+            }
+        },
+        body = {
+            Row(
+                Modifier.fillMaxWidth().padding(start = 18.dp, end = 18.dp, bottom = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    "근처 위험 구역",
+                    Modifier.weight(1f),
+                    fontSize = 13.5.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = colors.textStrong,
+                )
+                Text("${zones.size}건", fontSize = 11.sp, color = colors.textMuted)
+            }
+            Column(
+                Modifier.padding(start = 18.dp, end = 18.dp, bottom = 22.dp),
+                verticalArrangement = Arrangement.spacedBy(9.dp),
+            ) {
+                if (zones.isEmpty()) {
+                    Text(
+                        "주변에 등록된 위험 구역이 없습니다.",
+                        Modifier.fillMaxWidth().padding(vertical = 18.dp),
+                        fontSize = 12.5.sp,
+                        color = colors.textMuted,
+                        textAlign = TextAlign.Center,
+                    )
+                }
+                zones.forEach { zone -> ZoneRow(zone) }
+            }
+        },
+    )
+}
+
+@Composable
+private fun ZoneRow(zone: DangerZoneDto) {
+    val colors = SafeLightTheme.colors
+    val level = dangerLevelColor(zone.dangerLevel)
+    val shape = RoundedCornerShape(12.dp)
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .height(IntrinsicSize.Min)
+            .clip(shape)
+            .background(colors.surface)
+            .border(1.dp, colors.border, shape),
+    ) {
+        // 위험도는 왼쪽 색 띠로 먼저 읽힌다(웹의 borderLeft 4px).
+        Box(Modifier.width(4.dp).fillMaxHeight().background(level))
+        Column(Modifier.padding(horizontal = 13.dp, vertical = 12.dp)) {
+            Row(verticalAlignment = Alignment.Top) {
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        "위험구역 #${zone.dangerZoneId}",
+                        fontSize = 13.5.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = colors.textStrong,
+                    )
+                    Text(
+                        "%.4f, %.4f".format(zone.centerLatitude, zone.centerLongitude),
+                        Modifier.padding(top = 2.dp),
+                        fontSize = 11.sp,
+                        color = colors.textMuted,
+                    )
+                }
+                Text(
+                    zone.dangerLevel,
+                    Modifier
+                        .clip(RoundedCornerShape(7.dp))
+                        .background(level.copy(alpha = .12f))
+                        .padding(horizontal = 8.dp, vertical = 3.dp),
+                    fontSize = 10.5.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    color = level,
+                )
+            }
+            Row(
+                Modifier.padding(top = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(5.dp),
+            ) {
+                Icon(SafeIcons.MapPin, null, tint = colors.textMuted, modifier = Modifier.size(13.dp))
+                Text(
+                    "신고 ${zone.reportCount}건 · 반경 ${zone.radius.toInt()}m",
+                    fontSize = 11.5.sp,
+                    color = colors.textMuted,
+                )
             }
         }
     }
@@ -380,6 +567,7 @@ private fun moveToMyLocation(
     map: KakaoMap?,
     layers: MapLayers?,
     recenter: Boolean,
+    onLocation: (Double, Double) -> Unit = { _, _ -> },
 ) {
     if (map == null || !context.hasLocationPermission()) return
     LocationServices.getFusedLocationProviderClient(context).lastLocation
@@ -388,6 +576,7 @@ private fun moveToMyLocation(
             val here = LatLng.from(location.latitude, location.longitude)
             layers?.drawMyLocation(here)
             if (recenter) map.moveCamera(CameraUpdateFactory.newCenterPosition(here, FACILITY_MIN_ZOOM))
+            onLocation(location.latitude, location.longitude)
         }
         .addOnFailureListener { Log.w(TAG, "위치 조회 실패", it) }
 }

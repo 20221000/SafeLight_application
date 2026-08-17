@@ -113,7 +113,7 @@ fun RouteScreen(
     // 웹은 setCenter 뒤에 시트 높이의 절반만큼 panBy 로 밀지만, 안드로이드에는 지도 자체에
     // 여백을 알리는 setPadding 이 있어 카메라 이동·경로 맞추기가 모두 알아서 보정된다.
     // 시트를 mid 위로 올린 동안은 어차피 지도가 거의 안 보이므로 mid 까지만 반영한다(웹과 같은 규칙).
-    val mapBottomPaddingPx = minOf(sheet.currentPx, sheet.midPx).toInt()
+    val mapBottomPaddingPx = sheet.peekPx.toInt()
     LaunchedEffect(mapBottomPaddingPx, mapReady) {
         mapHolder[0]?.setPadding(0, 0, 0, mapBottomPaddingPx)
     }
@@ -175,12 +175,13 @@ fun RouteScreen(
         )
 
         // ── 지도 컨트롤 (우하단) ─────────────────────────────────────────────
-        // 시트 위로 올라오도록 시트 높이만큼 띄운다(웹도 visibleOffset 만큼 올린다).
+        // 시트 위로 올라오도록 시트 높이만큼 띄우되 mid 까지만이다 — 다 올린 시트는 어차피
+        // 지도를 덮으므로 버튼까지 따라 올리면 화면 위로 밀려 나간다(웹 visibleOffset 과 같다).
         Column(
             modifier = Modifier
                 .align(Alignment.BottomEnd)
                 .padding(end = 12.dp)
-                .padding(bottom = with(density) { sheet.currentPx.toDp() } + 16.dp),
+                .padding(bottom = with(density) { sheet.peekPx.toDp() } + 16.dp),
             horizontalAlignment = Alignment.End,
             verticalArrangement = Arrangement.spacedBy(24.dp),
         ) {

@@ -68,6 +68,16 @@ class MapViewModel : ViewModel() {
     var dangerZones by mutableStateOf<List<DangerZoneDto>>(emptyList())
         private set
 
+    /** 위험구역을 다시 받는 중. 시트의 LIVE 칩이 '갱신중'으로 바뀐다(웹 isLoading). */
+    var zonesLoading by mutableStateOf(false)
+        private set
+
+    /** 내 위치의 행정동. 못 찾으면 null 이고, 그때는 지역 표기를 생략한다. */
+    var regionName by mutableStateOf<String?>(null)
+        private set
+
+    private var regionJob: Job? = null
+
     var visibleCctv by mutableStateOf<List<CctvDto>>(emptyList())
         private set
 
@@ -106,10 +116,35 @@ class MapViewModel : ViewModel() {
     /** 웹 useSafetyData 와 같이 30초마다 새로 받는다. */
     private fun pollDangerZones() = viewModelScope.launch {
         while (isActive) {
+            zonesLoading = true
             runCatching { api.getDangerZones().unwrap() }
                 .onSuccess { dangerZones = it.filter { zone -> zone.isActive } }
                 .onFailure { Log.e(TAG, "위험구역 조회 실패", it) }
+            zonesLoading = false
             delay(30_000)
+        }
+    }
+
+    /**
+     * 내 위치의 행정동 이름. 웹 useRegionName 자리다 —
+     * 안전 현황 시트의 '반경 500m · 마포구 서교동' 뒷부분이다.
+     *
+     * 한 번만 찾는다. 지도를 옮길 때마다 다시 부르면 시트 제목이 계속 바뀌는데,
+     * 이 줄이 말하는 것은 '내가 있는 곳'이지 '지금 보고 있는 곳'이 아니다(웹도 같다).
+     */
+    fun onLocationKnown(latitude: Double, longitude: Double) {
+        if (regionName != null || regionJob?.isActive == true) return
+        regionJob = viewModelScope.launch {
+            val document = runCatching {
+                Network.kakaoLocal
+                    .coord2RegionCode(longitude = longitude.toString(), latitude = latitude.toString())
+                    .documents
+            }.getOrNull().orEmpty()
+            // region_type 'H' = 행정동. 없으면 첫 결과(법정동)로 대신한다.
+            val region = document.firstOrNull { it.regionType == "H" } ?: document.firstOrNull()
+            regionName = region
+                ?.let { listOf(it.depth2, it.depth3).filter(String::isNotBlank).joinToString(" ") }
+                ?.takeIf { it.isNotBlank() }
         }
     }
 

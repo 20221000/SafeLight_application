@@ -1,6 +1,9 @@
 package com.example.safelight.ui.map
 
 import android.util.Log
+import android.view.MotionEvent
+import android.view.ViewGroup.LayoutParams.MATCH_PARENT
+import android.widget.FrameLayout
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Text
@@ -71,9 +74,24 @@ fun KakaoMapHost(
 
     AndroidView(
         modifier = modifier.fillMaxSize(),
-        factory = {
-            mapView.apply {
-                start(
+        factory = { viewContext ->
+            // 스크롤되는 화면 안에 지도를 넣으면(알림 상세의 신고 위치, 관리자 위치 창) 세로로 끄는
+            // 손가락을 바깥 스크롤이 먼저 가져가 지도가 따라오지 않는다. 손가락이 지도에 닿아 있는
+            // 동안에는 바깥이 가로채지 못하게 막는다 — Compose 의 AndroidView 홀더가 이 요청을
+            // 받아 자기 제스처를 양보한다. 웹은 지도 div 가 알아서 이벤트를 삼켜 이런 코드가 없다.
+            object : FrameLayout(viewContext) {
+                override fun dispatchTouchEvent(event: MotionEvent): Boolean {
+                    if (event.actionMasked == MotionEvent.ACTION_DOWN) {
+                        parent?.requestDisallowInterceptTouchEvent(true)
+                    }
+                    return super.dispatchTouchEvent(event)
+                }
+            }.apply {
+                addView(
+                    mapView,
+                    FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT),
+                )
+                mapView.start(
                     object : MapLifeCycleCallback() {
                         override fun onMapDestroy() {
                             Log.d(TAG, "지도 종료")
