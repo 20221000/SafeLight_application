@@ -39,6 +39,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
@@ -175,15 +176,21 @@ private fun IdleButton(loading: Boolean, onClick: () -> Unit) {
     )
 
     Box(contentAlignment = Alignment.Center) {
-        if (!loading) {
-            Canvas(Modifier.size(IDLE_SIZE * 2)) {
-                val radius = size.minDimension / 4f * (1f + glow)
-                drawCircle(colors.danger.copy(alpha = (1f - glow) * .35f), radius = radius)
-            }
-        }
         Box(
             Modifier
                 .size(IDLE_SIZE)
+                // 맥박은 자리를 차지하면 안 된다. 예전처럼 88dp 짜리 Canvas 를 따로 두면
+                // 그 크기가 줄의 높이가 되어, 44dp 원 아래에 22dp 짜리 빈 칸이 생기고
+                // 안내 문구가 그만큼 멀리 떨어진다. drawBehind 는 이 칸(44dp) 밖으로 넘겨 그려도
+                // 레이아웃에는 잡히지 않는다 — 웹이 box-shadow 로 퍼뜨리는 것과 같은 처리다.
+                // 반지름·투명도는 웹 @keyframes ls-sos 를 그대로 옮겼다(0 → 16px 로 퍼지며 사라진다).
+                .drawBehind {
+                    if (loading) return@drawBehind
+                    drawCircle(
+                        color = colors.danger.copy(alpha = (1f - glow) * .5f),
+                        radius = size.minDimension / 2f + 16.dp.toPx() * glow,
+                    )
+                }
                 .clip(CircleShape)
                 .background(colors.danger)
                 .border(2.dp, Color.White, CircleShape)

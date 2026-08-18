@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -30,6 +31,7 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -37,6 +39,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -66,6 +69,9 @@ fun CommunityScreen(
     val colors = SafeLightTheme.colors
     var sortOpen by remember { mutableStateOf(false) }
     val sortSheet = rememberModalBottomSheetState()
+
+    // 이 화면에 들어올 때와 로그인 상태가 바뀔 때. 실패해 둔 조회만 다시 읽는다(자세한 이유는 onShown).
+    LaunchedEffect(loggedIn) { vm.onShown() }
 
     Box(modifier.fillMaxSize().background(colors.bg)) {
         LazyColumn(
@@ -109,7 +115,9 @@ fun CommunityScreen(
                     sort = vm.sort,
                     open = sortOpen,
                     onToggle = { sortOpen = !sortOpen },
-                    topPadding = if (vm.notices.isEmpty()) 0.dp else 14.dp,
+                    // 웹은 공지 묶음 아래 14 를 띄운다. 여기서는 마지막 공지 줄이 이미 8 을 달고
+                    // 있으므로(줄 사이 간격) 6 만 더한다 — 14 를 그대로 쓰면 22 가 되어 벌어진다.
+                    topPadding = if (vm.notices.isEmpty()) 0.dp else 6.dp,
                 )
             }
 
@@ -168,6 +176,14 @@ fun CommunityScreen(
                 .align(Alignment.BottomEnd)
                 .padding(16.dp)
                 .size(56.dp)
+                // 웹 `0 6px 18px rgba(37,99,235,.38)`. 그림자가 없으면 지도·목록 위에 얹힌 게 아니라
+                // 배경에 찍힌 파란 원처럼 보인다. 색을 파랑으로 줘야 회색 그림자로 탁해지지 않는다.
+                .shadow(
+                    elevation = 10.dp,
+                    shape = CircleShape,
+                    spotColor = colors.bluePrimary,
+                    ambientColor = colors.bluePrimary,
+                )
                 .clip(CircleShape)
                 .background(colors.bluePrimary)
                 .clickable { if (loggedIn) onWrite() else onGoLogin() },
@@ -178,39 +194,63 @@ fun CommunityScreen(
     }
 
     // 정렬 — 웹 모바일은 팝오버 대신 액션시트를 쓴다(좁은 화면에서 팝오버가 잘리고 터치 타깃도 작다).
+    // 치수는 웹 ActionSheet.jsx 를 그대로 옮겼다: 손잡이 38×4, 머리말 15/800 + 구분선,
+    // 항목은 최소 48 높이에 radius 11 이고 고른 것만 blue-tint 알약으로 덮인다.
     if (sortOpen) {
         ModalBottomSheet(
             onDismissRequest = { sortOpen = false },
             sheetState = sortSheet,
             containerColor = colors.surface,
+            shape = RoundedCornerShape(topStart = 18.dp, topEnd = 18.dp),
+            // Material 기본 손잡이는 32×4 에 위아래 22 라 웹보다 머리말이 한참 두껍다.
+            dragHandle = {
+                Box(
+                    Modifier.fillMaxWidth().padding(top = 10.dp, bottom = 6.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Box(
+                        Modifier
+                            .size(width = 38.dp, height = 4.dp)
+                            .clip(RoundedCornerShape(2.dp))
+                            .background(colors.border),
+                    )
+                }
+            },
         ) {
             Text(
                 "정렬",
-                fontSize = 13.sp,
-                fontWeight = FontWeight.Bold,
-                color = colors.textMuted,
-                modifier = Modifier.padding(start = 20.dp, bottom = 6.dp),
+                fontSize = 15.sp,
+                fontWeight = FontWeight.ExtraBold,
+                color = colors.textStrong,
+                modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 4.dp, bottom = 12.dp),
             )
-            PostSort.entries.forEach { option ->
-                val on = option == vm.sort
-                Row(
-                    Modifier
-                        .fillMaxWidth()
-                        .clickable {
-                            vm.selectSort(option)
-                            sortOpen = false
-                        }
-                        .padding(horizontal = 20.dp, vertical = 14.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(
-                        option.label,
-                        modifier = Modifier.weight(1f),
-                        fontSize = 15.sp,
-                        fontWeight = if (on) FontWeight.Bold else FontWeight.Normal,
-                        color = if (on) colors.bluePrimary else colors.textStrong,
-                    )
-                    if (on) Icon(SafeIcons.Check, null, tint = colors.bluePrimary, modifier = Modifier.size(18.dp))
+            Box(Modifier.fillMaxWidth().height(1.dp).background(colors.border))
+
+            Column(Modifier.padding(start = 10.dp, end = 10.dp, top = 6.dp, bottom = 10.dp)) {
+                PostSort.entries.forEach { option ->
+                    val on = option == vm.sort
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .heightIn(min = 48.dp)
+                            .clip(RoundedCornerShape(11.dp))
+                            .background(if (on) colors.blueTint else Color.Transparent)
+                            .clickable {
+                                vm.selectSort(option)
+                                sortOpen = false
+                            }
+                            .padding(horizontal = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            option.label,
+                            modifier = Modifier.weight(1f),
+                            fontSize = 14.5.sp,
+                            fontWeight = if (on) FontWeight.ExtraBold else FontWeight.SemiBold,
+                            color = if (on) colors.bluePrimary else colors.textStrong,
+                        )
+                        if (on) Icon(SafeIcons.Check, null, tint = colors.bluePrimary, modifier = Modifier.size(18.dp))
+                    }
                 }
             }
             // 시트 아래쪽 제스처 바 자리.
@@ -323,6 +363,9 @@ private fun NoticeRow(notice: PostListDto, onClick: () -> Unit) {
                 overflow = TextOverflow.Ellipsis,
             )
             Text(notice.createdAt.toDateOnly(), fontSize = 12.sp, color = colors.textMuted, maxLines = 1)
+            // 조회수. 웹 공지 줄에도 날짜 뒤에 같이 붙는다 — 이것만 빠져 있으면 공지 줄이
+            // 아래 목록보다 정보가 하나 적어 보인다.
+            MetricText(SafeIcons.Eye, notice.viewCount, highlighted = false)
         }
     }
 }

@@ -137,6 +137,25 @@ class CommunityViewModel : ViewModel() {
         loadPopular()
     }
 
+    /**
+     * 커뮤니티 탭에 들어올 때마다. **지난번 조회가 실패했을 때만** 다시 읽는다.
+     *
+     * 웹은 /community 로 갈 때마다 컴포넌트가 새로 마운트돼 두 조회가 처음부터 다시 돈다.
+     * 이 뷰모델은 세션 내내 살아 있어서(탭을 오가도 목록 위치가 유지되도록 그렇게 뒀다),
+     * 로그인 전이나 서버가 뜨기 전에 받은 실패가 그대로 굳는다.
+     *
+     * 목록은 탭이나 정렬을 누르면 load 가 다시 돌아 알아서 살아나지만, 인기글은 다시 읽을
+     * 손잡이가 아예 없다 — 그래서 로그인한 뒤에도 옆의 목록만 채워지고 카드는 계속
+     * '인기글을 불러오지 못했습니다'로 남았다.
+     *
+     * 성공해 둔 상태에서는 아무것도 하지 않는다. 조건 없이 다시 읽으면 탭을 한 번 오갈 때마다
+     * 요청이 여섯 개씩(목록 1 + 카테고리 5) 더 나간다.
+     */
+    fun onShown() {
+        if (error.isNotBlank()) load()
+        if (popularError.isNotBlank()) loadPopular()
+    }
+
     private fun load() {
         loading = true
         viewModelScope.launch {

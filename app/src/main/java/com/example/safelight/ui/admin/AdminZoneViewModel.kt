@@ -93,6 +93,12 @@ class AdminZoneViewModel : ViewModel() {
             } else {
                 val list = envelope.data.orEmpty()
                 zones = list
+                // 열려 있는 상세도 새 값으로 바꿔 끼운다. 목록만 갈면 대화상자 머리말의 위험도·신고 수가
+                // 처리하기 전 값에 멈춰 있다 — 허위신고로 확정해도 화면은 그대로라 안 먹은 것처럼 보인다.
+                // 비활성화돼 목록에서 빠진 구역은 마지막으로 알던 값을 남긴다(닫기 전까지 빈 칸이 되면 안 된다).
+                detailZone = detailZone?.let { open ->
+                    list.firstOrNull { it.dangerZoneId == open.dangerZoneId } ?: open
+                }
                 val weekAgo = System.currentTimeMillis() - 7L * 24 * 60 * 60 * 1000
                 newThisWeek = list.count { (parseTime(it.createdAt) ?: 0L) >= weekAgo }
             }

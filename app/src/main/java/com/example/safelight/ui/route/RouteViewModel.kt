@@ -23,6 +23,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlin.math.abs
 
 private const val TAG = "RouteViewModel"
 
@@ -132,14 +133,25 @@ class RouteViewModel : ViewModel() {
 
     private var startSearchJob: Job? = null
     private var destSearchJob: Job? = null
+    private var cctvJob: Job? = null
 
     init {
-        viewModelScope.launch {
-            allCctv = CctvCache.all()
-            lastBounds?.let { refreshCctv(it, lastZoom) }
-        }
+        ensureCctv()
         loadBookmarks()
         loadRecentRoutes()
+    }
+
+    /**
+     * CCTV 전체 목록을 확보한다. 이미 들고 있거나 받는 중이면 아무것도 하지 않는다.
+     * 지도 화면 MapViewModel.ensureCctv 와 같은 처리이고 이유도 같다 —
+     * 앱을 켤 때의 한 번이 실패하면 다시 받을 길이 없어 배경 CCTV 가 영영 안 나온다.
+     */
+    private fun ensureCctv() {
+        if (allCctv.isNotEmpty() || cctvJob?.isActive == true) return
+        cctvJob = viewModelScope.launch {
+            allCctv = CctvCache.all()
+            if (allCctv.isNotEmpty()) lastBounds?.let { refreshCctv(it, lastZoom) }
+        }
     }
 
     fun messageShown() {
@@ -151,6 +163,7 @@ class RouteViewModel : ViewModel() {
     fun onCameraIdle(bounds: MapBounds, zoom: Int) {
         lastBounds = bounds
         lastZoom = zoom
+        ensureCctv()
         refreshCctv(bounds, zoom)
     }
 
@@ -331,12 +344,35 @@ class RouteViewModel : ViewModel() {
             .mapIndexed { index, route -> RankedRoute(rank = index + 1, route = route) }
     }
 
-    /** 결과를 화면에 올린다. 어느 구간의 결과인지 함께 적어 둔다([invalidateResultsIfSegmentChanged]). */
-    private fun showRoutes(found: List<RankedRoute>, start: RoutePlace, dest: RoutePlace) {
+    /**
+     * 결과를 화면에 올린다. 어느 구간의 결과인지 함께 적어 둔다([invalidateResultsIfSegmentChanged]).
+     *
+     * [preferScore] 는 북마크가 저장해 둔 안전시설 점수다. 주면 그 점수에 맞는 경로를 기본으로
+     * 고른다 — 자세한 이유는 [pickByScore]. 새로 검색할 때는 없으므로 1등이 잡힌다.
+     */
+    private fun showRoutes(
+        found: List<RankedRoute>,
+        start: RoutePlace,
+        dest: RoutePlace,
+        preferScore: Int? = null,
+    ) {
         resultSegment = segmentKey(start, dest)
         routes = found
-        selectedRoute = found.first()
+        selectedRoute = found.pickByScore(preferScore)
         isSearched = true
+    }
+
+    /**
+     * 저장해 둔 점수에 가장 가까운 경로. 점수가 없으면(= 새 검색이면) 1등이다.
+     *
+     * 북마크에는 경로 선이 저장되지 않고 저장 당시의 점수만 남는다. 그래서 '그때 그 경로'는
+     * 점수로 되짚는 수밖에 없다 — 늘 1등을 고르면 북마크할 때 보던 것과 다른 길이 잡힌다.
+     * 딱 맞는 점수가 없을 수도 있어서(그사이 CCTV·편의점 데이터가 바뀌면 점수도 달라진다)
+     * 가장 가까운 쪽을 고른다. 동점이면 목록이 점수 내림차순이라 더 높은 순위가 먼저 잡힌다.
+     */
+    private fun List<RankedRoute>.pickByScore(score: Int?): RankedRoute? {
+        if (score == null) return firstOrNull()
+        return minByOrNull { abs(it.safetyScore - score) } ?: firstOrNull()
     }
 
     private fun clearResults() {
@@ -460,7 +496,8 @@ class RouteViewModel : ViewModel() {
             bookmarkBusyId = null
             if (found.isEmpty()) return@launch
             loadRecentRoutes()
-            showRoutes(found, start, dest)
+            // 저장할 때 보던 경로가 기본으로 잡히게 한다(안 그러면 늘 점수 1등이 잡힌다).
+            showRoutes(found, start, dest, preferScore = bookmark.safetyScore)
         }
     }
 

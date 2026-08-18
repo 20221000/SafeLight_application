@@ -102,15 +102,33 @@ class MapViewModel : ViewModel() {
     private var lastBounds: MapBounds? = null
     private var lastZoom: Int = INITIAL_ZOOM
     private var storeJob: Job? = null
+    private var cctvJob: Job? = null
 
     init {
-        loadCctv()
+        ensureCctv()
         pollDangerZones()
     }
 
-    private fun loadCctv() = viewModelScope.launch {
-        allCctv = CctvCache.all()
-        lastBounds?.let { refreshCctv(it, lastZoom) }
+    /**
+     * CCTV 전체 목록을 확보한다. 이미 들고 있거나 받는 중이면 아무것도 하지 않는다.
+     *
+     * **다시 시도할 길이 있어야 한다.** 예전에는 이걸 init 에서 한 번만 불렀는데, 그 한 번이
+     * 실패하면 — 서버가 아직 안 떴거나, 4만 건짜리 응답이 앱을 켤 때 몰리는 다른 요청들과
+     * 겹쳐 끊기거나 — 그걸로 끝이었다. 그러면 지도에 CCTV 가 영영 안 나오는데 화면에는
+     * '이 지역에는 CCTV가 없습니다' 라고 떠서, 서울 한복판에서도 데이터가 없는 것처럼 보였다.
+     * 게다가 경로 화면은 뷰모델이 나중에(탭을 처음 열 때) 만들어지는 바람에 그쪽만 멀쩡해
+     * 보여서, 지도 쪽 데이터만 없는 것처럼 읽혔다.
+     *
+     * 지도가 멈출 때마다 부른다 — 마침 목록이 필요해지는 시점이다. [CctvCache] 는 성공한 것만
+     * 기억하므로 한 번 받아 둔 뒤의 호출은 네트워크를 타지 않고, 실패해서 계속 비어 있는 동안에도
+     * cctvJob 때문에 요청은 한 번에 하나만 나간다.
+     */
+    private fun ensureCctv() {
+        if (allCctv.isNotEmpty() || cctvJob?.isActive == true) return
+        cctvJob = viewModelScope.launch {
+            allCctv = CctvCache.all()
+            if (allCctv.isNotEmpty()) lastBounds?.let { refreshCctv(it, lastZoom) }
+        }
     }
 
     /** 웹 useSafetyData 와 같이 30초마다 새로 받는다. */
@@ -161,6 +179,8 @@ class MapViewModel : ViewModel() {
     fun onCameraIdle(bounds: MapBounds, zoom: Int) {
         lastBounds = bounds
         lastZoom = zoom
+        // 앱을 켤 때 CCTV 목록을 못 받았으면 여기서 다시 받는다(자세한 이유는 ensureCctv).
+        ensureCctv()
         refreshCctv(bounds, zoom)
         refreshStores(bounds, zoom)
     }

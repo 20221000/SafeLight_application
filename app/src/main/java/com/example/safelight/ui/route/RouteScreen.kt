@@ -39,6 +39,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -48,6 +49,8 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
@@ -183,7 +186,10 @@ fun RouteScreen(
                 .padding(end = 12.dp)
                 .padding(bottom = with(density) { sheet.peekPx.toDp() } + 16.dp),
             horizontalAlignment = Alignment.End,
-            verticalArrangement = Arrangement.spacedBy(24.dp),
+            // 웹은 확대/축소 묶음을 offset+16 에, 현재 위치 버튼을 offset+104 에 둔다.
+            // 묶음이 81 높이(40+구분선+40)라 둘 사이는 8 이다 — 24 로 벌리면 현재 위치 버튼만
+            // 따로 떠 있는 것처럼 보인다.
+            verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             MapControlSurface {
                 MapControlButton({
@@ -248,8 +254,10 @@ fun RouteScreen(
                 }
             },
             body = {
+                // 위 12 는 제목 블록과 첫 카드 사이 몫이다. 웹은 머리말과 카드들이 한 컬럼에
+                // gap:12 로 묶여 있어서, 머리말 자신의 아래 여백 10 뒤에 12 가 더 붙는다.
                 Column(
-                    Modifier.padding(start = 16.dp, end = 16.dp, bottom = 16.dp),
+                    Modifier.padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 16.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
                     StartCard(vm)
@@ -656,7 +664,7 @@ private fun ResultCard(vm: RouteViewModel, onStartGuidance: (ActiveRoute) -> Uni
                 }
                 // 합계만 보면 무엇이 많아서 높은지 알 수 없어 내역을 같이 보여준다.
                 Row(
-                    Modifier.padding(top = 6.dp),
+                    Modifier.padding(top = 8.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
@@ -674,27 +682,41 @@ private fun ResultCard(vm: RouteViewModel, onStartGuidance: (ActiveRoute) -> Uni
             }
         }
 
-        PrimaryButton(
-            text = "지도에서 경로 보기",
-            icon = SafeIcons.Play,
-            onClick = {
-                val route = vm.selectedRoute ?: return@PrimaryButton
-                onStartGuidance(
-                    ActiveRoute(
-                        path = route.route.path,
-                        start = vm.selectedStart,
-                        destination = vm.selectedDest,
-                        safetyScore = route.safetyScore,
-                    ),
-                )
-            },
-        )
-        Row(
+        // 웹은 이 세 버튼을 gap 8 짜리 한 묶음으로 두고 마지막 경로 카드와 8 을 띄운다
+        // (카드 자신의 아래 여백 8 과 합쳐 16).
+        Column(
             Modifier.fillMaxWidth().padding(top = 8.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            OutlineButton("북마크 저장", SafeIcons.Star, colors.bluePrimary, Modifier.weight(1f), vm::saveBookmark)
-            OutlineButton("다시 검색", SafeIcons.Refresh, colors.textMuted, Modifier.weight(1f), vm::resetSearch)
+            // '안전 경로 찾기'(48/12/15)보다 한 단계 낮은 44/11/14 다. 이쪽은 결과 카드 **안**의
+            // 버튼이라 검색 버튼과 같은 덩치로 서면 카드가 버튼에 눌린다. 그림자도 없다.
+            PrimaryButton(
+                text = "지도에서 경로 보기",
+                icon = SafeIcons.Play,
+                height = 44.dp,
+                cornerRadius = 11.dp,
+                fontSize = 14.sp,
+                iconSize = 15.dp,
+                elevated = false,
+                onClick = {
+                    val route = vm.selectedRoute ?: return@PrimaryButton
+                    onStartGuidance(
+                        ActiveRoute(
+                            path = route.route.path,
+                            start = vm.selectedStart,
+                            destination = vm.selectedDest,
+                            safetyScore = route.safetyScore,
+                        ),
+                    )
+                },
+            )
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                OutlineButton("북마크 저장", SafeIcons.Star, colors.bluePrimary, Modifier.weight(1f), vm::saveBookmark)
+                OutlineButton("다시 검색", SafeIcons.Refresh, colors.textMuted, Modifier.weight(1f), vm::resetSearch)
+            }
         }
     }
 }
@@ -868,13 +890,16 @@ private fun TabButton(
                 fontWeight = if (active) FontWeight.Bold else FontWeight.Normal,
             )
         }
-        // 웹은 탭 아래 2px 밑줄로 선택을 표시하고, 나머지 자리에는 카드 경계선이 이어진다.
-        Box(
-            Modifier
-                .fillMaxWidth()
-                .height(2.dp)
-                .background(if (active) colors.bluePrimary else colors.border),
-        )
+        // 웹은 탭 줄 전체에 1px 경계선을 깔고, 고른 탭에만 그 위로 2px 파란 막대를 덧댄다.
+        // 안 고른 탭까지 2 로 그리면 카드 한가운데 굵은 회색 줄이 그어진 것처럼 보인다.
+        Box(Modifier.fillMaxWidth().height(2.dp), contentAlignment = Alignment.TopCenter) {
+            Box(
+                Modifier
+                    .fillMaxWidth()
+                    .height(if (active) 2.dp else 1.dp)
+                    .background(if (active) colors.bluePrimary else colors.border),
+            )
+        }
     }
 }
 
@@ -912,6 +937,9 @@ private fun RouteTextField(value: String, onValueChange: (String) -> Unit, place
     Box(
         Modifier
             .fillMaxWidth()
+            // 아래 4 는 웹 inputStyle 의 marginBottom: 4 다. 이게 없으면 바로 밑에 오는
+            // 후보 목록(marginTop 4)과 북마크 정렬 칩(margin 6)이 웹보다 붙어 버린다.
+            .padding(bottom = 4.dp)
             .height(42.dp)
             .clip(RoundedCornerShape(10.dp))
             .background(colors.bg)
@@ -985,26 +1013,42 @@ private fun EmptyText(text: String) {
     }
 }
 
+/** 기본값은 '안전 경로 찾기' 버튼(웹 48/radius 12/15sp + 파란 그림자)이다. */
 @Composable
 private fun PrimaryButton(
     text: String,
     icon: ImageVector?,
     enabled: Boolean = true,
+    height: Dp = 48.dp,
+    cornerRadius: Dp = 12.dp,
+    fontSize: TextUnit = 15.sp,
+    iconSize: Dp = 16.dp,
+    elevated: Boolean = true,
     onClick: () -> Unit,
 ) {
     val colors = SafeLightTheme.colors
+    val shape = RoundedCornerShape(cornerRadius)
     Row(
         Modifier
             .fillMaxWidth()
-            .height(48.dp)
-            .clip(RoundedCornerShape(12.dp))
+            .height(height)
+            // 웹 `0 6px 16px rgba(37,99,235,.28)`. 회색 그림자가 파란 면 아래 깔리면 탁해져서
+            // 색을 버튼과 같은 파랑으로 준다.
+            .then(
+                if (elevated) {
+                    Modifier.shadow(9.dp, shape, spotColor = colors.bluePrimary, ambientColor = colors.bluePrimary)
+                } else {
+                    Modifier
+                },
+            )
+            .clip(shape)
             .background(colors.bluePrimary.copy(alpha = if (enabled) 1f else 0.7f))
             .clickable(enabled = enabled, onClick = onClick),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
     ) {
-        if (icon != null) Icon(icon, null, tint = Color.White, modifier = Modifier.size(16.dp))
-        Text(text, fontSize = 15.sp, fontWeight = FontWeight.Bold, color = Color.White)
+        if (icon != null) Icon(icon, null, tint = Color.White, modifier = Modifier.size(iconSize))
+        Text(text, fontSize = fontSize, fontWeight = FontWeight.Bold, color = Color.White)
     }
 }
 

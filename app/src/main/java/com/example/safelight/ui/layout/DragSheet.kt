@@ -4,6 +4,7 @@ import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animate
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.draggable
@@ -27,6 +28,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
@@ -193,12 +195,18 @@ fun DragSheet(
         }
     }
 
+    // 시트와 그 아래 탭바는 둘 다 surface(흰색)라, 경계선과 그림자가 없으면 시트를 내렸을 때
+    // 두 면이 한 덩어리로 보인다 — 어디까지가 시트인지 읽을 수가 없다(웹도 같은 이유로
+    // borderTop 1px 과 `0 -4px 20px rgba(15,23,42,.08)` 을 함께 준다).
+    val sheetShape = RoundedCornerShape(topStart = 18.dp, topEnd = 18.dp)
     Column(
         modifier
             .fillMaxWidth()
             .height(with(density) { state.currentPx.toDp() })
-            .clip(RoundedCornerShape(topStart = 18.dp, topEnd = 18.dp))
-            .background(colors.surface),
+            .shadow(elevation = 10.dp, shape = sheetShape, clip = false)
+            .clip(sheetShape)
+            .background(colors.surface)
+            .border(1.dp, colors.border, sheetShape),
     ) {
         // 핸들은 스크롤 영역 밖에 둔다 — 안에 있으면 시트 이동과 본문 스크롤이 서로 먹는다.
         Box(

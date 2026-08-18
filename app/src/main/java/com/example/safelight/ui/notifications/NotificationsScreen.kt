@@ -122,17 +122,28 @@ fun NotificationsScreen(
 @Composable
 private fun Header(subtitle: String, showMarkAll: Boolean, onBack: () -> Unit, onMarkAll: () -> Unit) {
     val colors = SafeLightTheme.colors
-    Column(Modifier.fillMaxWidth().background(colors.surface)) {
+    // 배경을 깔지 않는다. 웹 모바일은 이 머리말을 페이지 배경(bg) 위에 두고 아래 선만 긋는다.
+    // surface 로 칠하면 바로 위의 앱 헤더(역시 흰색)와 이어 붙어, 화면 꼭대기부터 부제까지가
+    // 165dp 짜리 흰 판 하나로 읽힌다 — 머리말 자체는 웹과 같은 높이(75dp)인데도 '칸이 크다'고
+    // 보이던 게 이것 때문이다. 웹은 앱 헤더만 흰색이고 그 아래는 회색이라 둘이 갈라져 보인다.
+    Column(Modifier.fillMaxWidth()) {
         Row(
-            Modifier.padding(start = 8.dp, end = 14.dp, top = 14.dp, bottom = 12.dp),
+            Modifier.padding(start = 14.dp, end = 14.dp, top = 14.dp, bottom = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
+            // 웹과 같은 34 짜리 테두리 상자에 18 짜리 갈매기표다. 예전에는 테두리 없이 22 짜리
+            // 굵은 화살표라, 흰 판 왼쪽에 큰 기호 하나만 덩그러니 놓인 모양이었다.
             Box(
-                Modifier.size(34.dp).clip(RoundedCornerShape(10.dp)).clickable(onClick = onBack),
+                Modifier
+                    .size(34.dp)
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(colors.surface)
+                    .border(1.dp, colors.border, RoundedCornerShape(10.dp))
+                    .clickable(onClick = onBack),
                 contentAlignment = Alignment.Center,
             ) {
-                Icon(SafeIcons.ArrowLeft, "뒤로", tint = colors.textStrong, modifier = Modifier.size(22.dp))
+                Icon(SafeIcons.ChevronLeft, "뒤로", tint = colors.textMuted, modifier = Modifier.size(18.dp))
             }
             Column(Modifier.weight(1f)) {
                 Text("알림", fontSize = 17.sp, fontWeight = FontWeight.ExtraBold, color = colors.textStrong)
@@ -143,6 +154,8 @@ private fun Header(subtitle: String, showMarkAll: Boolean, onBack: () -> Unit, o
                     Modifier
                         .height(32.dp)
                         .clip(RoundedCornerShape(9.dp))
+                        // 머리말이 회색 배경 위로 내려왔으니 웹처럼 흰 바탕을 깔아야 버튼으로 읽힌다.
+                        .background(colors.surface)
                         .border(1.dp, colors.border, RoundedCornerShape(9.dp))
                         .clickable(onClick = onMarkAll)
                         .padding(horizontal = 12.dp),

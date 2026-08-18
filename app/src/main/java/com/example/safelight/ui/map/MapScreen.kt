@@ -287,14 +287,6 @@ fun MapScreen(
             }
         }
 
-        // ── 긴급 SOS ────────────────────────────────────────────────────────
-        // 지도 중앙 하단의 상시 버튼. 시트가 가리는 만큼 위로 피한다(웹과 같다).
-        SosButton(
-            loggedIn = loggedIn,
-            onNeedLogin = onNeedLogin,
-            bottomPadding = with(LocalDensity.current) { sheet.peekPx.toDp() },
-        )
-
         // ── 내 주변 안전 현황 (바텀시트) ─────────────────────────────────────
         // 웹은 MobileShell 이 rightDrawer(RightPanel)를 시트로 내려준다. 데스크탑의 320px
         // 우측 패널 자리이며, 지도만 있고 이 시트가 없으면 활성 위험구역이 몇 건인지
@@ -305,6 +297,18 @@ fun MapScreen(
             region = vm.regionName,
             loading = vm.zonesLoading,
             modifier = Modifier.align(Alignment.BottomCenter),
+        )
+
+        // ── 긴급 SOS ────────────────────────────────────────────────────────
+        // 지도 중앙 하단의 상시 버튼. 시트가 가리는 만큼 위로 피하되 mid 까지만 따라 올라간다.
+        //
+        // 시트보다 **뒤에** 그린다. 앞에 두면 시트를 끝까지 올렸을 때 SOS 가 그 밑에 깔려
+        // 사라진다 — 위급할 때 누를 것이 화면에서 없어지는 셈이라 이 화면에서 제일 나쁜 상태다.
+        // 웹도 같은 이유로 SOS 에 z-index 100, 시트에 25 를 줘서 시트 위에 띄운다.
+        SosButton(
+            loggedIn = loggedIn,
+            onNeedLogin = onNeedLogin,
+            bottomPadding = with(LocalDensity.current) { sheet.peekPx.toDp() },
         )
     }
 }
@@ -334,8 +338,10 @@ private fun SafetySheet(
                         fontWeight = FontWeight.Bold,
                         color = colors.textStrong,
                     )
+                    // 거리로 거르지 않는다. GET /danger-zones 는 활성 구역을 전부 주고 위치도 반경도 받지 않아
+                    // '반경 500m'·'근처' 라고 쓰면 몇 km 밖 구역이 그 말 밑에 그대로 나온다(웹과 같이 고쳤다).
                     Text(
-                        "반경 500m" + (region?.let { " · $it" } ?: ""),
+                        region ?: "위치 확인 중",
                         fontSize = 11.5.sp,
                         color = colors.textMuted,
                         modifier = Modifier.padding(top = 2.dp),
@@ -365,7 +371,7 @@ private fun SafetySheet(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
-                    "근처 위험 구역",
+                    "활성 위험 구역",
                     Modifier.weight(1f),
                     fontSize = 13.5.sp,
                     fontWeight = FontWeight.Bold,
@@ -379,7 +385,7 @@ private fun SafetySheet(
             ) {
                 if (zones.isEmpty()) {
                     Text(
-                        "주변에 등록된 위험 구역이 없습니다.",
+                        "지금 활성된 위험 구역이 없습니다.",
                         Modifier.fillMaxWidth().padding(vertical = 18.dp),
                         fontSize = 12.5.sp,
                         color = colors.textMuted,

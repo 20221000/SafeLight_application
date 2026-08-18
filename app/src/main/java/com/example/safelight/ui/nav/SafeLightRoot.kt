@@ -4,11 +4,8 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Icon
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
-import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -38,6 +35,7 @@ import com.example.safelight.ui.community.PostDetailScreen
 import com.example.safelight.ui.community.PostWriteScreen
 import com.example.safelight.ui.friends.FriendsScreen
 import com.example.safelight.ui.layout.SafeLightHeader
+import com.example.safelight.ui.layout.SafeLightTabBar
 import com.example.safelight.ui.messages.MessagesScreen
 import com.example.safelight.ui.notifications.NotificationsScreen
 import com.example.safelight.ui.notifications.UNREAD_POLL_MS
@@ -156,32 +154,13 @@ fun SafeLightRoot(night: Boolean, onToggleNight: () -> Unit) {
             )
         },
         bottomBar = {
-            NavigationBar(containerColor = SafeLightTheme.colors.surface) {
-                UserTab.entries.forEach { tab ->
-                    NavigationBarItem(
-                        // 게시글 상세·글쓰기처럼 탭 안에서 더 들어간 화면에서도 그 탭에 불이 켜져 있어야 한다
-                        // (웹도 UserShell 에 active="community" 를 그대로 넘긴다).
-                        selected = currentRoute == tab.route ||
-                            currentRoute?.startsWith("${tab.route}/") == true,
-                        onClick = {
-                            if (currentRoute == tab.route) return@NavigationBarItem
-                            navController.navigate(tab.route) {
-                                // 탭을 오갈 때 백스택이 무한히 쌓이지 않게 시작 지점까지 정리한다.
-                                popUpTo(navController.graph.findStartDestination().id) { saveState = true }
-                                launchSingleTop = true
-                                restoreState = true
-                            }
-                        },
-                        icon = { Icon(tab.icon, contentDescription = tab.label) },
-                        label = { Text(tab.label) },
-                        colors = NavigationBarItemDefaults.colors(
-                            selectedIconColor = SafeLightTheme.colors.bluePrimary,
-                            selectedTextColor = SafeLightTheme.colors.bluePrimary,
-                            indicatorColor = SafeLightTheme.colors.blueTint,
-                            unselectedIconColor = SafeLightTheme.colors.textMuted,
-                            unselectedTextColor = SafeLightTheme.colors.textMuted,
-                        ),
-                    )
+            SafeLightTabBar(current = currentRoute) { tab ->
+                if (currentRoute == tab.route) return@SafeLightTabBar
+                navController.navigate(tab.route) {
+                    // 탭을 오갈 때 백스택이 무한히 쌓이지 않게 시작 지점까지 정리한다.
+                    popUpTo(navController.graph.findStartDestination().id) { saveState = true }
+                    launchSingleTop = true
+                    restoreState = true
                 }
             }
         },
