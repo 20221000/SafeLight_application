@@ -41,6 +41,7 @@ data class RankedRoute(val rank: Int, val route: RouteDto) {
     val safetyScore get() = route.safetyScore
     val cctvCount get() = route.cctvLocations.size
     val storeCount get() = route.storeLocations.size
+    val lampCount get() = route.securityLightLocations.size
 }
 
 /**

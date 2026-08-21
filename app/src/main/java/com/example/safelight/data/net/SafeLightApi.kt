@@ -35,6 +35,17 @@ interface SafeLightApi {
     @GET("cctvs")
     suspend fun getCctvs(): ApiEnvelope<List<CctvDto>>
 
+    /**
+     * 가로등(보안등) 전체. [getCctvs] 와 같은 자리이고, 백엔드가 주는 건 좌표뿐이다
+     * (SecurityLightService 가 CSV 에서 위경도만 추린다).
+     *
+     * **아직 백엔드에 없을 수 있다** — 2026-08-21 기준 요청만 넣어 둔 상태라 404 가 온다.
+     * 부르는 쪽(MapViewModel.ensureLamps)이 실패를 '데이터 없음'과 구분해 다루므로,
+     * 없으면 지도 칩이 잠긴 채로 남고 화면은 멀쩡하다.
+     */
+    @GET("security-lights")
+    suspend fun getSecurityLights(): ApiEnvelope<List<LocationDto>>
+
     /** 토큰이 없으면 빈 목록이 온다(웹도 토큰이 없으면 아예 요청하지 않는다). */
     @GET("danger-zones")
     suspend fun getDangerZones(): ApiEnvelope<List<DangerZoneDto>>
@@ -414,8 +425,12 @@ data class RouteRequest(
 /**
  * 탐색된 경로 하나.
  *
- * [safetyScore] 는 CCTV 수 + 편의점 수의 합이다(백엔드 RouteService.analyzeSafetyData).
+ * [safetyScore] 는 CCTV 수 + 편의점 수 + 보안등 수의 합이다(백엔드 RouteService.analyzeSafetyData).
  * 'CCTV 개수'가 아니므로 화면에서도 '안전시설 n곳'이라고 적는다.
+ *
+ * [securityLightLocations] 는 가로등(보안등)이다 — 2026-08-21 백엔드 PR #16 로 합계에 들어왔다.
+ * 가로등을 주는 곳은 이 응답뿐이라(/cctvs 에 해당하는 전용 엔드포인트가 없다) 지도 화면이 아니라
+ * 경로 화면에서만 그릴 수 있다.
  */
 @Serializable
 data class RouteDto(
@@ -425,6 +440,7 @@ data class RouteDto(
     val description: String = "",
     val cctvLocations: List<LocationDto> = emptyList(),
     val storeLocations: List<LocationDto> = emptyList(),
+    val securityLightLocations: List<LocationDto> = emptyList(),
 )
 
 @Serializable

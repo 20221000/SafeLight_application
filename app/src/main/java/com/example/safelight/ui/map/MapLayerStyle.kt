@@ -51,6 +51,17 @@ private fun fromWebLevel(webLevel: Int) = WEB_LEVEL_TO_ZOOM - webLevel
 val FACILITY_MIN_ZOOM = fromWebLevel(4)
 
 /**
+ * 가로등만 한 단계 더 확대해야 그린다. 웹의 `LAMP_MAX_LEVEL = 3` 과 같다.
+ *
+ * CCTV·편의점과 같은 넓이로 두면 못 쓴다 — 보안등은 125,897개로 CCTV(41,905)의 3배고
+ * 자치구별 편차도 크다. 웹에서 CSV 좌표를 화면 크기에 대고 세어 본 값(2026-08-21):
+ *   성북구청 L4 데스크탑 1,731 / L3 526,  종각역 L4 1,086 / L3 168
+ * L4 면 가로등만 1,700개가 넘어 CCTV·편의점까지 합치면 2천 개다. 웹 실측에서 678개가
+ * 이미 메인스레드 455ms 였으니 그대로 멎는다. 값을 고칠 땐 웹 layerStyle.js 도 같이 고친다.
+ */
+val LAMP_MIN_ZOOM = fromWebLevel(3)
+
+/**
  * 편의점 상호를 띄우는 최소 확대. 웹의 `STORE_NAME_MAX_LEVEL = 2` 와 같다.
  * 이보다 넓게 보면 라벨 폭(상호 길이만큼 늘어난다)이 서로 겹쳐 지도의 다른 정보를 가린다.
  */

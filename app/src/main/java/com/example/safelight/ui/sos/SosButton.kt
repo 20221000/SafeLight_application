@@ -67,12 +67,15 @@ private val IDLE_SIZE = 44.dp
  * 신고가 남고 위험구역이 생기며 친구들에게 알림이 나간다.
  *
  * [bottomPadding] 은 바텀시트가 가리는 높이다(웹의 `--ls-sheet-peek`).
+ *
+ * [onReported] 는 접수가 끝난 직후 부른다. 웹 SosButton 의 같은 이름 prop 과 짝이다.
  */
 @Composable
 fun BoxScope.SosButton(
     loggedIn: Boolean,
     onNeedLogin: () -> Unit,
     bottomPadding: Dp = 0.dp,
+    onReported: () -> Unit = {},
     vm: SosViewModel = viewModel(),
 ) {
     val context = LocalContextCompat()
@@ -82,6 +85,14 @@ fun BoxScope.SosButton(
         ActivityResultContracts.RequestPermission(),
     ) { granted ->
         if (granted) vm.submit(context) else vm.onPermissionDenied()
+    }
+
+    // 접수가 끝나면 곧바로 지도에 알린다. 이 신고 하나로 위험구역이 새로 생기거나 등급이
+    // 오르는데, 지도는 30초 폴링으로만 그걸 알게 된다(MapViewModel.pollDangerZones) —
+    // 방금 내가 만든 구역이 30초 동안 안 보이면 접수가 안 된 것처럼 보인다.
+    // Done 은 접수 한 건당 한 번만 들어오는 단계라 이 키로 중복 없이 한 번 불린다.
+    LaunchedEffect(vm.phase) {
+        if (vm.phase == SosPhase.Done) onReported()
     }
 
     // 확인 단계에 들어가면 3초 뒤 저절로 접수된다. 손이 굳어 못 누르는 상황을 위한 것이라

@@ -59,26 +59,33 @@ class MapLayers(
     // 경로 선은 시설 점보다 아래다 — 선이 점을 덮으면 어디에 CCTV 가 있는지 안 보인다.
     private val routeLines = map.routeLineManager?.addLayer("routes", BASE_Z_ORDER + 1)
     private val dangerBadges = labelLayer("dangerBadges", BASE_Z_ORDER + 2)
-    private val cctvLabels = labelLayer("cctv", BASE_Z_ORDER + 3)
-    private val storeLabels = labelLayer("stores", BASE_Z_ORDER + 4)
+    // 가로등은 CCTV 아래다 — 12만 개가 넘어 한 화면에도 제일 많이 깔리는데, 위에 두면
+    // 몇 안 되는 CCTV 점을 노란 점들이 덮는다(웹은 zIndex 1 로 같은 순서를 준다).
+    private val lampLabels = labelLayer("lamps", BASE_Z_ORDER + 3)
+    private val cctvLabels = labelLayer("cctv", BASE_Z_ORDER + 4)
+    private val storeLabels = labelLayer("stores", BASE_Z_ORDER + 5)
     // 경로 위 안전시설 점은 배경 CCTV 와 겹쳐도 보여야 하므로 그 위에 둔다(웹 zIndex 2 자리).
-    private val routeFacilityLabels = labelLayer("routeFacilities", BASE_Z_ORDER + 5)
-    private val myLocationLabels = labelLayer("myLocation", BASE_Z_ORDER + 6)
+    private val routeFacilityLabels = labelLayer("routeFacilities", BASE_Z_ORDER + 6)
+    private val myLocationLabels = labelLayer("myLocation", BASE_Z_ORDER + 7)
     // 출발·도착과 검색 핀은 사용자가 직접 지정한 것이라 무엇에도 가리지 않게 맨 위에 둔다.
-    private val routeEndpointLabels = labelLayer("routeEndpoints", BASE_Z_ORDER + 7)
-    private val searchLabels = labelLayer("search", BASE_Z_ORDER + 8)
+    private val routeEndpointLabels = labelLayer("routeEndpoints", BASE_Z_ORDER + 8)
+    private val searchLabels = labelLayer("search", BASE_Z_ORDER + 9)
 
     // 점 모양은 모든 마커가 같으니 스타일을 한 번만 등록해 돌려 쓴다.
     // 지도를 움직일 때마다 새로 등록하면 SDK 의 스타일 표가 계속 불어난다.
     // 상호·위험도 배지는 글자마다 비트맵이 달라 어쩔 수 없이 매번 등록한다.
     private val cctvDotStyle by lazy { registerStyle(markers.dot(LayerColor.cctv)) }
     private val storeDotStyle by lazy { registerStyle(markers.dot(LayerColor.store)) }
+    private val lampDotStyle by lazy { registerStyle(markers.dot(LayerColor.streetLamp)) }
     private val myLocationStyle by lazy { registerStyle(markers.myLocation()) }
     private val routeCctvDotStyle by lazy {
         registerStyle(markers.dot(LayerColor.cctv, ROUTE_DOT_SIZE_DP))
     }
     private val routeStoreDotStyle by lazy {
         registerStyle(markers.dot(LayerColor.store, ROUTE_DOT_SIZE_DP))
+    }
+    private val routeLampDotStyle by lazy {
+        registerStyle(markers.dot(LayerColor.streetLamp, ROUTE_DOT_SIZE_DP))
     }
 
     /**
@@ -114,6 +121,14 @@ class MapLayers(
     fun drawCctv(items: List<CctvDto>, small: Boolean = false) {
         val style = (if (small) routeCctvDotStyle else cctvDotStyle) ?: return
         cctvLabels?.putAll(
+            items.map { LabelOptions.from(LatLng.from(it.latitude, it.longitude)).setStyles(style) },
+        )
+    }
+
+    /** 지도 화면의 가로등 점. CCTV 와 같은 크기(11dp)를 쓴다. */
+    fun drawLamps(items: List<LocationDto>) {
+        val style = lampDotStyle ?: return
+        lampLabels?.putAll(
             items.map { LabelOptions.from(LatLng.from(it.latitude, it.longitude)).setStyles(style) },
         )
     }
@@ -216,6 +231,7 @@ class MapLayers(
         destinationColor: Color = RouteColor.destination,
         cctvLocations: List<LocationDto> = emptyList(),
         storeLocations: List<LocationDto> = emptyList(),
+        lampLocations: List<LocationDto> = emptyList(),
     ) {
         routeLines?.removeAll()
         routeEndpointLabels?.removeAll()
@@ -247,7 +263,11 @@ class MapLayers(
             },
         )
 
+        // 가로등을 먼저 넣어 아래에 깔고 CCTV·편의점을 그 위에 올린다. 보안등은 12만 개가 넘어
+        // 경로 하나에 수십~수백 개가 붙는데, 나중에 그리면 몇 안 되는 CCTV 점을 노란 점들이 덮는다.
+        // (웹 RoutePage.drawFacilities 의 add 순서와 같다.)
         val facilities = buildList {
+            routeLampDotStyle?.let { style -> lampLocations.forEach { add(it to style) } }
             routeCctvDotStyle?.let { style -> cctvLocations.forEach { add(it to style) } }
             routeStoreDotStyle?.let { style -> storeLocations.forEach { add(it to style) } }
         }

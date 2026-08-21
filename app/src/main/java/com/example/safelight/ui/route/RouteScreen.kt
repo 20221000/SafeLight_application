@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -144,6 +145,7 @@ fun RouteScreen(
             destination = vm.selectedDest?.toLatLng(),
             cctvLocations = route?.cctvLocations.orEmpty(),
             storeLocations = route?.storeLocations.orEmpty(),
+            lampLocations = route?.securityLightLocations.orEmpty(),
         )
         val points = route?.path.orEmpty()
         if (points.isNotEmpty()) {
@@ -246,7 +248,7 @@ fun RouteScreen(
                         color = colors.textStrong,
                     )
                     Text(
-                        "CCTV·가로등 밀집도로 안전한 길을 찾습니다",
+                        "CCTV·가로등·편의점 밀집도로 안전한 길을 찾습니다",
                         fontSize = 12.5.sp,
                         color = colors.textMuted,
                         modifier = Modifier.padding(top = 2.dp),
@@ -576,7 +578,7 @@ private fun BookmarkRow(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
-            // 북마크 응답에는 safetyScore 합계만 있고 CCTV/편의점 내역은 없다.
+            // 북마크 응답에는 safetyScore 합계만 있고 CCTV/가로등/편의점 내역은 없다.
             Text(
                 if (busy) "경로를 불러오는 중…" else "안전시설 ${bookmark.safetyScore}곳 · 눌러서 경로 보기",
                 fontSize = 11.sp,
@@ -663,12 +665,14 @@ private fun ResultCard(vm: RouteViewModel, onStartGuidance: (ActiveRoute) -> Uni
                     )
                 }
                 // 합계만 보면 무엇이 많아서 높은지 알 수 없어 내역을 같이 보여준다.
-                Row(
+                // 셋이 한 줄에 안 들어가면 접는다 — 보안등 수는 네 자리까지 간다(웹도 flexWrap).
+                FlowRow(
                     Modifier.padding(top = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalArrangement = Arrangement.spacedBy(3.dp),
                 ) {
                     FacilityCount(LayerColor.cctv, "CCTV ${ranked.cctvCount}")
+                    FacilityCount(LayerColor.streetLamp, "가로등 ${ranked.lampCount}")
                     FacilityCount(LayerColor.store, "편의점 ${ranked.storeCount}")
                 }
                 if (ranked.route.description.isNotBlank()) {

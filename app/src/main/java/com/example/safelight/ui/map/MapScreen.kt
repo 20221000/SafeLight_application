@@ -123,6 +123,9 @@ fun MapScreen(
     LaunchedEffect(vm.visibleCctv, mapReady) {
         layersHolder[0]?.drawCctv(vm.visibleCctv)
     }
+    LaunchedEffect(vm.visibleLamps, mapReady) {
+        layersHolder[0]?.drawLamps(vm.visibleLamps)
+    }
     LaunchedEffect(vm.visibleStores, vm.showStoreNames, mapReady) {
         layersHolder[0]?.drawStores(vm.visibleStores, vm.showStoreNames)
     }
@@ -215,8 +218,13 @@ fun MapScreen(
             horizontalArrangement = Arrangement.spacedBy(6.dp),
         ) {
             LayerChip("cctv", SafeIcons.Cctv, "CCTV", vm.filters.cctv, vm::toggleFilter)
-            // 가로등은 아직 데이터가 없다 — 켜도 표시할 게 없으므로 잠가둔다.
-            LayerChip("streetLamp", SafeIcons.StreetLamp, "가로등", false, vm::toggleFilter, pending = true)
+            // 가로등은 GET /security-lights 를 받아온 뒤에만 열린다(웹 MapView 와 같다).
+            // 그 응답이 없으면 켤 것이 없으므로 잠근 채로 둔다.
+            LayerChip(
+                "streetLamp", SafeIcons.StreetLamp, "가로등",
+                vm.lampReady && vm.filters.streetLamp, vm::toggleFilter,
+                pending = !vm.lampReady,
+            )
             // safeZone = 편의점(안전거점).
             LayerChip("safeZone", SafeIcons.Store, "편의점", vm.filters.safeZone, vm::toggleFilter)
         }
@@ -232,7 +240,11 @@ fun MapScreen(
             ),
             verticalArrangement = Arrangement.spacedBy(5.dp),
         ) {
-            listOf(vm.cctvNotice to LayerColor.cctv, vm.storeNotice to LayerColor.store)
+            listOf(
+                vm.cctvNotice to LayerColor.cctv,
+                vm.lampNotice to LayerColor.streetLamp,
+                vm.storeNotice to LayerColor.store,
+            )
                 .filter { it.first.isNotEmpty() }
                 .forEach { (text, color) -> LayerNotice(text, color) }
         }
@@ -309,6 +321,8 @@ fun MapScreen(
             loggedIn = loggedIn,
             onNeedLogin = onNeedLogin,
             bottomPadding = with(LocalDensity.current) { sheet.peekPx.toDp() },
+            // 접수 직후 위험구역을 다시 읽는다 — 내가 만든 구역이 30초 뒤에 나타나면 안 된다.
+            onReported = vm::refreshDangerZones,
         )
     }
 }

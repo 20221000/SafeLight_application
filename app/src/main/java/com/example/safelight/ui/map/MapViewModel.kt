@@ -9,6 +9,7 @@ import androidx.lifecycle.viewModelScope
 import com.example.safelight.data.CctvCache
 import com.example.safelight.data.net.CctvDto
 import com.example.safelight.data.net.DangerZoneDto
+import com.example.safelight.data.net.LocationDto
 import com.example.safelight.data.net.Network
 import com.example.safelight.data.net.PlaceDocument
 import com.example.safelight.data.net.SafeLightApi
@@ -21,6 +22,9 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
 private const val TAG = "MapViewModel"
+
+/** 가로등 목록을 다시 받아 볼 횟수. 자세한 이유는 MapViewModel.ensureLamps. */
+private const val MAX_LAMP_ATTEMPTS = 3
 
 /** 지도에 보이는 영역. 카카오 SDK 타입을 그대로 쓰면 뷰모델이 지도에 묶이므로 값만 들고 다닌다. */
 data class MapBounds(
@@ -51,10 +55,10 @@ data class MapBounds(
 /** 지도에 그릴 편의점 하나. */
 data class StorePlace(val id: String, val name: String, val latitude: Double, val longitude: Double)
 
-/** 레이어 켬/끔. 웹 MainPage 의 `{ cctv: true, streetLamp: false, safeZone: true }` 와 같은 초기값이다. */
+/** 레이어 켬/끔. 웹 MainPage 의 `{ cctv: true, streetLamp: true, safeZone: true }` 와 같은 초기값이다. */
 data class MapFilters(
     val cctv: Boolean = true,
-    val streetLamp: Boolean = false,
+    val streetLamp: Boolean = true,
     val safeZone: Boolean = true,
 )
 
@@ -81,6 +85,16 @@ class MapViewModel : ViewModel() {
     var visibleCctv by mutableStateOf<List<CctvDto>>(emptyList())
         private set
 
+    var visibleLamps by mutableStateOf<List<LocationDto>>(emptyList())
+        private set
+
+    /**
+     * 가로등 목록을 실제로 받아왔는지 = 칩을 열어도 되는지.
+     * 못 받으면 잠근 채로 둔다 — 켤 수 없는 칩을 켜지게 해두면 눌러도 아무 일이 없어 고장으로 보인다.
+     */
+    var lampReady by mutableStateOf(false)
+        private set
+
     var visibleStores by mutableStateOf<List<StorePlace>>(emptyList())
         private set
 
@@ -89,6 +103,9 @@ class MapViewModel : ViewModel() {
         private set
 
     var cctvNotice by mutableStateOf("")
+        private set
+
+    var lampNotice by mutableStateOf("")
         private set
 
     var storeNotice by mutableStateOf("")
@@ -103,10 +120,45 @@ class MapViewModel : ViewModel() {
     private var lastZoom: Int = INITIAL_ZOOM
     private var storeJob: Job? = null
     private var cctvJob: Job? = null
+    private var zoneRefreshJob: Job? = null
+    private var allLamps: List<LocationDto> = emptyList()
+    private var lampJob: Job? = null
+    private var lampFailures = 0
 
     init {
         ensureCctv()
+        ensureLamps()
         pollDangerZones()
+    }
+
+    /**
+     * 가로등 전체 목록. [ensureCctv] 와 같은 이유로 지도가 멈출 때마다 다시 시도한다.
+     *
+     * 실패와 '엔드포인트 없음'을 빈 목록으로 뭉뚱그리지 않는다. 둘을 같게 다루면 아직 안 만들어진
+     * 기능이 '이 지역에는 가로등이 없습니다' 로 보인다 — 서울 한복판에서 그 문구가 뜨면
+     * 데이터가 없는 줄 알게 된다. 못 받은 동안에는 [lampReady] 가 false 로 남아 칩이 잠기고
+     * 안내 문구도 띄우지 않는다(웹 MapView 와 같은 처리).
+     */
+    private fun ensureLamps() {
+        if (allLamps.isNotEmpty() || lampJob?.isActive == true) return
+        // CCTV 와 달리 횟수를 제한한다. /cctvs 는 있는 엔드포인트라 실패가 대개 일시적이지만,
+        // /security-lights 는 아직 백엔드에 없어서(2026-08-21 현재 500) 지도를 움직일 때마다
+        // 영영 다시 부르게 된다 — 실제로 앱을 켠 지 10초 만에 세 번 나갔다. 세 번이면
+        // 서버가 늦게 뜨는 정도는 넘기고, 그 뒤로는 조용히 포기한다(다시 켜면 처음부터 센다).
+        if (lampFailures >= MAX_LAMP_ATTEMPTS) return
+        lampJob = viewModelScope.launch {
+            val list = runCatching { api.getSecurityLights().unwrap() }
+                .onFailure { Log.e(TAG, "가로등 조회 실패", it) }
+                .getOrNull()
+                .orEmpty()
+            if (list.isEmpty()) {
+                lampFailures++
+                return@launch
+            }
+            allLamps = list
+            lampReady = true
+            lastBounds?.let { refreshLamps(it, lastZoom) }
+        }
     }
 
     /**
@@ -134,13 +186,31 @@ class MapViewModel : ViewModel() {
     /** 웹 useSafetyData 와 같이 30초마다 새로 받는다. */
     private fun pollDangerZones() = viewModelScope.launch {
         while (isActive) {
-            zonesLoading = true
-            runCatching { api.getDangerZones().unwrap() }
-                .onSuccess { dangerZones = it.filter { zone -> zone.isActive } }
-                .onFailure { Log.e(TAG, "위험구역 조회 실패", it) }
-            zonesLoading = false
+            fetchDangerZones()
             delay(30_000)
         }
+    }
+
+    private suspend fun fetchDangerZones() {
+        zonesLoading = true
+        runCatching { api.getDangerZones().unwrap() }
+            .onSuccess { dangerZones = it.filter { zone -> zone.isActive } }
+            .onFailure { Log.e(TAG, "위험구역 조회 실패", it) }
+        zonesLoading = false
+    }
+
+    /**
+     * 위험구역을 지금 바로 다시 읽는다. 긴급신고를 접수한 직후처럼 30초를 기다리면 안 되는
+     * 순간에 부른다 — 신고 하나로 백엔드가 위험구역을 새로 만들거나 등급·신고수를 올리는데
+     * (EmergencyReportService.createReport), 방금 내가 만든 구역이 30초 동안 지도에 없으면
+     * 접수가 안 된 것처럼 보인다. 긴급 기능에서 제일 하면 안 되는 착각이다.
+     *
+     * 폴링 루프와는 별도 job 이라 겹쳐 불려도 요청은 한 번에 하나만 나간다.
+     * (루프 job 은 앱이 사는 내내 active 라 그걸로는 막을 수 없다.)
+     */
+    fun refreshDangerZones() {
+        if (zoneRefreshJob?.isActive == true) return
+        zoneRefreshJob = viewModelScope.launch { fetchDangerZones() }
     }
 
     /**
@@ -170,7 +240,9 @@ class MapViewModel : ViewModel() {
         filters = when (key) {
             "cctv" -> filters.copy(cctv = !filters.cctv)
             "safeZone" -> filters.copy(safeZone = !filters.safeZone)
-            else -> return   // 가로등은 데이터가 없어 잠겨 있다
+            // 목록을 못 받았으면 켤 것이 없다. 화면도 이때는 칩을 잠가 둔다(lampReady).
+            "streetLamp" -> if (lampReady) filters.copy(streetLamp = !filters.streetLamp) else return
+            else -> return
         }
         lastBounds?.let { onCameraIdle(it, lastZoom) }
     }
@@ -181,8 +253,29 @@ class MapViewModel : ViewModel() {
         lastZoom = zoom
         // 앱을 켤 때 CCTV 목록을 못 받았으면 여기서 다시 받는다(자세한 이유는 ensureCctv).
         ensureCctv()
+        ensureLamps()
         refreshCctv(bounds, zoom)
+        refreshLamps(bounds, zoom)
         refreshStores(bounds, zoom)
+    }
+
+    private fun refreshLamps(bounds: MapBounds, zoom: Int) {
+        // 목록을 못 받았으면 문구도 띄우지 않는다 — 아직 못 받아온 것과 진짜 없는 것은 다르다.
+        if (!lampReady || !filters.streetLamp) {
+            visibleLamps = emptyList()
+            lampNotice = ""
+            return
+        }
+        // CCTV 보다 한 단계 더 확대해야 그린다(개수가 3배다 — LAMP_MIN_ZOOM).
+        if (zoom < LAMP_MIN_ZOOM) {
+            visibleLamps = emptyList()
+            lampNotice = "지도를 확대하면 주변 가로등이 표시됩니다"
+            return
+        }
+        val inBounds = allLamps.filter { bounds.contains(it.latitude, it.longitude) }
+        visibleLamps = inBounds
+        lampNotice =
+            if (inBounds.isEmpty()) "이 지역에는 가로등이 없습니다" else "가로등 ${inBounds.size}개"
     }
 
     private fun refreshCctv(bounds: MapBounds, zoom: Int) {

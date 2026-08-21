@@ -12,6 +12,9 @@ import com.example.safelight.data.net.Network
 import com.example.safelight.data.net.ReportStatusRequest
 import com.example.safelight.data.net.SafeLightApi
 import com.example.safelight.data.net.errorMessage
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Locale
@@ -61,6 +64,7 @@ class AdminZoneViewModel : ViewModel() {
         private set
 
     private var started = false
+    private var pollJob: Job? = null
 
     val highCount: Int get() = zones.count { it.dangerLevel == "HIGH" }
 
@@ -76,6 +80,17 @@ class AdminZoneViewModel : ViewModel() {
         if (started) return
         started = true
         load()
+        // 긴급신고가 들어오면 백엔드가 위험구역을 새로 만들거나 등급·신고수를 올린다
+        // (EmergencyReportService.createReport). 그런데 이 화면은 처음 한 번만 읽고 있어서,
+        // 관리자가 화면을 열어 둔 채로는 새 구역이 영영 안 보였다 — 신고 목록에는 뜨는데
+        // 위험구역만 '활성 위험구역이 없습니다' 로 남는다. 백엔드에 푸시 수단이 없으므로
+        // 지도 화면(MapViewModel.pollDangerZones)·웹(useSafetyData)과 같은 30초 주기로 다시 읽는다.
+        pollJob = viewModelScope.launch {
+            while (isActive) {
+                delay(30_000)
+                load(silent = true)
+            }
+        }
     }
 
     fun focus(zoneId: Long) {
@@ -83,13 +98,20 @@ class AdminZoneViewModel : ViewModel() {
         focusSeq++
     }
 
-    private fun load() {
-        loading = true
-        error = null
+    /**
+     * [silent] 는 주기 갱신용이다. 로딩 표시를 켜지 않고, 한 번 실패해도 오류로 넘기지 않는다 —
+     * 30초마다 목록이 '불러오는 중…' 으로 깜빡이거나 잠깐의 네트워크 끊김이 보고 있던 목록을
+     * 오류 화면으로 바꿔 버리면 오히려 쓰기 나빠진다.
+     */
+    private fun load(silent: Boolean = false) {
+        if (!silent) {
+            loading = true
+            error = null
+        }
         viewModelScope.launch {
             val envelope = runCatching { api.getDangerZones() }.getOrNull()
             if (envelope == null || !envelope.success) {
-                error = envelope?.message ?: "위험구역을 불러오지 못했습니다."
+                if (!silent) error = envelope?.message ?: "위험구역을 불러오지 못했습니다."
             } else {
                 val list = envelope.data.orEmpty()
                 zones = list
@@ -101,8 +123,9 @@ class AdminZoneViewModel : ViewModel() {
                 }
                 val weekAgo = System.currentTimeMillis() - 7L * 24 * 60 * 60 * 1000
                 newThisWeek = list.count { (parseTime(it.createdAt) ?: 0L) >= weekAgo }
+                error = null
             }
-            loading = false
+            if (!silent) loading = false
         }
     }
 
