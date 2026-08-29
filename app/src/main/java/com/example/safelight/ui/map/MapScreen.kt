@@ -218,13 +218,7 @@ fun MapScreen(
             horizontalArrangement = Arrangement.spacedBy(6.dp),
         ) {
             LayerChip("cctv", SafeIcons.Cctv, "CCTV", vm.filters.cctv, vm::toggleFilter)
-            // 가로등은 GET /security-lights 를 받아온 뒤에만 열린다(웹 MapView 와 같다).
-            // 그 응답이 없으면 켤 것이 없으므로 잠근 채로 둔다.
-            LayerChip(
-                "streetLamp", SafeIcons.StreetLamp, "가로등",
-                vm.lampReady && vm.filters.streetLamp, vm::toggleFilter,
-                pending = !vm.lampReady,
-            )
+            LayerChip("streetLamp", SafeIcons.StreetLamp, "가로등", vm.filters.streetLamp, vm::toggleFilter)
             // safeZone = 편의점(안전거점).
             LayerChip("safeZone", SafeIcons.Store, "편의점", vm.filters.safeZone, vm::toggleFilter)
         }
@@ -483,9 +477,10 @@ private fun RouteBanner(safetyScore: Int, onClick: () -> Unit, modifier: Modifie
         horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         Icon(SafeIcons.Compass, null, tint = Color.White, modifier = Modifier.size(13.dp))
-        // safetyScore 는 CCTV + 편의점 합계다(RouteService.analyzeSafetyData).
+        // safetyScore 는 개수가 아니라 가중 점수다 — CCTV×3 + 편의점×3 + 보안등×1 + 치안시설×4
+        // (RouteService.calculateWeightedSafetyScore). '곳'이라고 적으면 시설 수로 오해한다.
         Text(
-            "경로 안내 중 · 안전시설 ${safetyScore}곳 경유",
+            "경로 안내 중 · 안전 점수 ${safetyScore}점",
             fontSize = 11.5.sp,
             fontWeight = FontWeight.Bold,
             color = Color.White,

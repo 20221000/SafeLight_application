@@ -580,7 +580,7 @@ private fun BookmarkRow(
             )
             // 북마크 응답에는 safetyScore 합계만 있고 CCTV/가로등/편의점 내역은 없다.
             Text(
-                if (busy) "경로를 불러오는 중…" else "안전시설 ${bookmark.safetyScore}곳 · 눌러서 경로 보기",
+                if (busy) "경로를 불러오는 중…" else "안전 점수 ${bookmark.safetyScore}점 · 눌러서 경로 보기",
                 fontSize = 11.sp,
                 color = if (busy) colors.bluePrimary else colors.textMuted,
             )
@@ -641,13 +641,13 @@ private fun ResultCard(vm: RouteViewModel, onStartGuidance: (ActiveRoute) -> Uni
                         )
                     }
                     Text(
-                        "안전시설 ${ranked.safetyScore}곳",
+                        "안전 점수 ${ranked.safetyScore}점",
                         fontSize = 13.sp,
                         fontWeight = FontWeight.Bold,
                         color = scoreColor(ranked.safetyScore),
                     )
                 }
-                // 점수 막대. 웹과 같이 100% 를 50곳으로 본다(safetyScore * 2).
+                // 점수 막대. 웹과 같이 100점을 가득 찬 것으로 본다.
                 Box(
                     Modifier
                         .fillMaxWidth()
@@ -658,7 +658,7 @@ private fun ResultCard(vm: RouteViewModel, onStartGuidance: (ActiveRoute) -> Uni
                 ) {
                     Box(
                         Modifier
-                            .fillMaxWidth(minOf(ranked.safetyScore * 2 / 100f, 1f))
+                            .fillMaxWidth(minOf(ranked.safetyScore / 100f, 1f))
                             .height(5.dp)
                             .clip(RoundedCornerShape(3.dp))
                             .background(scoreColor(ranked.safetyScore)),
@@ -736,12 +736,17 @@ private fun FacilityCount(dotColor: Color, text: String) {
     }
 }
 
-/** 웹 RoutePage 의 scoreColor — 20곳 이상 초록, 10곳 이상 주황, 그 아래는 빨강. */
+/**
+ * 웹 RoutePage 의 scoreColor — 60점 이상 초록, 30점 이상 주황, 그 아래는 빨강.
+ *
+ * safetyScore 에 가중치가 붙으면서(CCTV×3 + 편의점×3 + 보안등×1 + 치안시설×4)
+ * 같은 경로라도 값이 3배 가까이 커져 기준을 같이 올렸다(예전 20/10).
+ */
 @Composable
 private fun scoreColor(score: Int): Color = with(SafeLightTheme.colors) {
     when {
-        score >= 20 -> safe
-        score >= 10 -> warning
+        score >= 60 -> safe
+        score >= 30 -> warning
         else -> danger
     }
 }

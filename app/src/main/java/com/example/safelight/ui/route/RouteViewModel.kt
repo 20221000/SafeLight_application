@@ -6,7 +6,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.safelight.data.CctvCache
+import com.example.safelight.data.FacilityCache
 import com.example.safelight.data.net.BookmarkDto
 import com.example.safelight.data.net.BookmarkRequest
 import com.example.safelight.data.net.CctvDto
@@ -128,7 +128,6 @@ class RouteViewModel : ViewModel() {
     var visibleCctv by mutableStateOf<List<CctvDto>>(emptyList())
         private set
 
-    private var allCctv: List<CctvDto> = emptyList()
     private var lastBounds: MapBounds? = null
     private var lastZoom: Int = FACILITY_MIN_ZOOM
 
@@ -137,22 +136,8 @@ class RouteViewModel : ViewModel() {
     private var cctvJob: Job? = null
 
     init {
-        ensureCctv()
         loadBookmarks()
         loadRecentRoutes()
-    }
-
-    /**
-     * CCTV 전체 목록을 확보한다. 이미 들고 있거나 받는 중이면 아무것도 하지 않는다.
-     * 지도 화면 MapViewModel.ensureCctv 와 같은 처리이고 이유도 같다 —
-     * 앱을 켤 때의 한 번이 실패하면 다시 받을 길이 없어 배경 CCTV 가 영영 안 나온다.
-     */
-    private fun ensureCctv() {
-        if (allCctv.isNotEmpty() || cctvJob?.isActive == true) return
-        cctvJob = viewModelScope.launch {
-            allCctv = CctvCache.all()
-            if (allCctv.isNotEmpty()) lastBounds?.let { refreshCctv(it, lastZoom) }
-        }
     }
 
     fun messageShown() {
@@ -164,15 +149,28 @@ class RouteViewModel : ViewModel() {
     fun onCameraIdle(bounds: MapBounds, zoom: Int) {
         lastBounds = bounds
         lastZoom = zoom
-        ensureCctv()
         refreshCctv(bounds, zoom)
     }
 
+    /**
+     * 웹 RoutePage 도 지도 화면과 같은 규칙을 쓴다 — 화면 안에 있는 것만, 이 확대부터.
+     *
+     * 예전에는 전국 목록을 한 번 받아 두고 걸렀는데, 전국 CCTV 가 25만 건이 되면서
+     * 전체 조회가 없어졌다. 지금은 화면이 멈출 때마다 그 범위만 받는다
+     * (같은 범위 안이면 [FacilityCache] 가 네트워크를 타지 않는다).
+     */
     private fun refreshCctv(bounds: MapBounds, zoom: Int) {
-        // 웹 RoutePage 도 지도 화면과 같은 규칙을 쓴다 — 화면 안에 있는 것만, 이 확대부터.
-        visibleCctv =
-            if (zoom < FACILITY_MIN_ZOOM) emptyList()
-            else allCctv.filter { bounds.contains(it.latitude, it.longitude) }
+        if (zoom < FACILITY_MIN_ZOOM || bounds.isTooWide()) {
+            visibleCctv = emptyList()
+            return
+        }
+        cctvJob?.cancel()
+        cctvJob = viewModelScope.launch {
+            val list = runCatching { FacilityCache.cctv.load(bounds) }
+                .onFailure { Log.e(TAG, "CCTV 조회 실패", it) }
+                .getOrElse { return@launch }
+            visibleCctv = list.filter { bounds.contains(it.latitude, it.longitude) }
+        }
     }
 
     // ── 출발지 ────────────────────────────────────────────────────────────────
