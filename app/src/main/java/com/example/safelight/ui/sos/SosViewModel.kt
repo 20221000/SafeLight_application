@@ -17,6 +17,7 @@ import com.google.android.gms.tasks.CancellationTokenSource
 import kotlinx.coroutines.launch
 import kotlin.coroutines.resume
 import kotlin.coroutines.suspendCoroutine
+import com.example.safelight.ui.common.hasLocationPermission
 
 /** 확인 창이 저절로 접수되기까지. 웹과 같은 3초다. */
 internal const val COUNTDOWN_MS = 3_000L

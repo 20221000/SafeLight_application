@@ -46,6 +46,7 @@ import com.example.safelight.ui.map.KakaoMapHost
 import com.example.safelight.ui.theme.SafeLightTheme
 import com.kakao.vectormap.LatLng
 import java.util.Locale
+import com.example.safelight.ui.common.EmptyText
 
 /** 목록의 시각 — 오늘이면 HH:mm, 아니면 MM-DD. */
 private fun shortStamp(iso: String): String {
@@ -481,13 +482,3 @@ private fun Badge(text: String, color: Color, background: Color) {
     )
 }
 
-@Composable
-private fun EmptyText(text: String) {
-    Text(
-        text,
-        Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 48.dp),
-        fontSize = 13.sp,
-        color = SafeLightTheme.colors.textMuted,
-        textAlign = TextAlign.Center,
-    )
-}

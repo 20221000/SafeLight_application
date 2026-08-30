@@ -59,6 +59,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.safelight.ui.icon.SafeIcons
 import com.example.safelight.ui.theme.SafeLightTheme
 import java.util.Locale
+import com.example.safelight.ui.common.EmptyText
 
 /** 닉네임에서 아바타 색을 정한다. 웹 MessagesPage 의 PALETTE 와 같은 값·같은 해시다. */
 private val PALETTE = listOf(
@@ -572,13 +573,3 @@ private fun Avatar(name: String, size: Int) {
     }
 }
 
-@Composable
-private fun EmptyText(text: String) {
-    Text(
-        text,
-        Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 48.dp),
-        fontSize = 13.sp,
-        color = SafeLightTheme.colors.textMuted,
-        textAlign = TextAlign.Center,
-    )
-}

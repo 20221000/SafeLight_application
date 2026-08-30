@@ -73,6 +73,10 @@ import com.google.android.gms.location.LocationServices
 import com.kakao.vectormap.KakaoMap
 import com.kakao.vectormap.LatLng
 import com.kakao.vectormap.camera.CameraUpdateFactory
+import com.example.safelight.ui.common.EmptyText
+import com.example.safelight.ui.common.MapControlButton
+import com.example.safelight.ui.common.MapControlSurface
+import com.example.safelight.ui.common.hasLocationPermission
 
 private const val TAG = "RouteScreen"
 
@@ -406,7 +410,7 @@ private fun DestCard(vm: RouteViewModel) {
 
         if (vm.destMode == DestMode.Recent) {
             if (vm.recentRoutes.isEmpty()) {
-                EmptyText("최근 검색한 경로가 없습니다.")
+                EmptyText("최근 검색한 경로가 없습니다.", horizontal = 0.dp, vertical = 20.dp)
             } else {
                 vm.recentRoutes.forEach { history ->
                     RecentRow(
@@ -542,7 +546,7 @@ private fun BookmarkCard(vm: RouteViewModel) {
             }
         }
         if (visible.isEmpty()) {
-            EmptyText("검색 결과가 없습니다.")
+            EmptyText("검색 결과가 없습니다.", horizontal = 0.dp, vertical = 20.dp)
         } else {
             visible.forEach { bookmark ->
                 BookmarkRow(
@@ -1038,13 +1042,6 @@ private fun PlaceResultList(
     }
 }
 
-@Composable
-private fun EmptyText(text: String) {
-    Box(Modifier.fillMaxWidth().padding(vertical = 20.dp), contentAlignment = Alignment.Center) {
-        Text(text, fontSize = 13.sp, color = SafeLightTheme.colors.textMuted)
-    }
-}
-
 /** 기본값은 '안전 경로 찾기' 버튼(웹 48/radius 12/15sp + 파란 그림자)이다. */
 @Composable
 private fun PrimaryButton(
@@ -1126,32 +1123,6 @@ private fun OutlineButton(
     }
 }
 
-@Composable
-private fun MapControlSurface(content: @Composable () -> Unit) {
-    val colors = SafeLightTheme.colors
-    Box(
-        Modifier
-            .clip(RoundedCornerShape(11.dp))
-            .background(colors.surface)
-            .border(1.dp, colors.border, RoundedCornerShape(11.dp)),
-    ) { content() }
-}
-
-@Composable
-private fun MapControlButton(onClick: () -> Unit, content: @Composable () -> Unit) {
-    Box(
-        Modifier.size(40.dp).clickable(onClick = onClick),
-        contentAlignment = Alignment.Center,
-    ) { content() }
-}
-
-private fun Modifier.alphaIf(condition: Boolean, alpha: Float) =
-    if (condition) this.then(Modifier.alpha(alpha)) else this
-
-private fun Context.hasLocationPermission() =
-    ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) ==
-        PackageManager.PERMISSION_GRANTED
-
 @SuppressLint("MissingPermission")   // 호출 전에 hasLocationPermission 으로 확인한다
 private fun requestCurrentLocation(context: Context, onLocation: (Double, Double) -> Unit) {
     if (!context.hasLocationPermission()) return
@@ -1161,3 +1132,6 @@ private fun requestCurrentLocation(context: Context, onLocation: (Double, Double
         }
         .addOnFailureListener { Log.w(TAG, "위치 조회 실패", it) }
 }
+
+private fun Modifier.alphaIf(condition: Boolean, alpha: Float) =
+    if (condition) this.then(Modifier.alpha(alpha)) else this

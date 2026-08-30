@@ -409,7 +409,3 @@ private fun BoxScope.DoneBanner(reportId: Long?, onClose: () -> Unit) {
 @Composable
 private fun LocalContextCompat(): Context = androidx.compose.ui.platform.LocalContext.current
 
-@SuppressLint("MissingPermission")
-internal fun Context.hasLocationPermission(): Boolean =
-    ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) ==
-        PackageManager.PERMISSION_GRANTED

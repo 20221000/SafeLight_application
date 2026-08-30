@@ -60,6 +60,7 @@ import com.example.safelight.ui.community.toDateOnly
 import com.example.safelight.ui.icon.SafeIcons
 import com.example.safelight.ui.theme.SafeLightTheme
 import java.util.Locale
+import com.example.safelight.ui.common.EmptyText
 
 /**
  * '내 정보' 탭. 로그인 전에는 로그인·회원가입 화면이고, 로그인 후에는 웹 MyInfoPage 와 같은 내용이다.
@@ -227,7 +228,7 @@ private fun MyInfoContent(
                 else "커뮤니티에 작성한 글이 여기에 표시됩니다.",
             ) {
                 if (vm.myPosts.isEmpty()) {
-                    EmptyText("아직 작성한 글이 없습니다.")
+                    EmptyText("아직 작성한 글이 없습니다.", horizontal = 0.dp, vertical = 18.dp)
                 } else {
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         vm.myPosts.forEach { MyPostRow(it, onClick = { onOpenPost(it.postId) }) }
@@ -241,7 +242,7 @@ private fun MyInfoContent(
                 else "내가 접수한 긴급 신고가 여기에 표시됩니다.",
             ) {
                 if (vm.myReports.isEmpty()) {
-                    EmptyText("아직 신고 내역이 없습니다.")
+                    EmptyText("아직 신고 내역이 없습니다.", horizontal = 0.dp, vertical = 18.dp)
                 } else {
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         vm.myReports.forEach { MyReportRow(it) }
@@ -801,13 +802,3 @@ private fun Badge(text: String, color: Color) {
     )
 }
 
-@Composable
-private fun EmptyText(text: String) {
-    Text(
-        text,
-        Modifier.fillMaxWidth().padding(vertical = 18.dp),
-        fontSize = 13.sp,
-        color = SafeLightTheme.colors.textMuted,
-        textAlign = TextAlign.Center,
-    )
-}

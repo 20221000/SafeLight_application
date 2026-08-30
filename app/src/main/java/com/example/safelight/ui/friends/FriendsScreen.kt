@@ -57,6 +57,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.safelight.data.net.FriendDto
 import com.example.safelight.ui.icon.SafeIcons
 import com.example.safelight.ui.theme.SafeLightTheme
+import com.example.safelight.ui.common.EmptyText
 
 /**
  * 친구 관리. 웹 FriendsPage 의 모바일 배치를 그대로 옮겼다 —
@@ -139,16 +140,16 @@ fun FriendsScreen(
             }
 
             when {
-                vm.loading -> item { ListCard { EmptyText("불러오는 중...") } }
+                vm.loading -> item { ListCard { EmptyText("불러오는 중...", vertical = 40.dp) } }
 
                 vm.tab == FriendTab.Friends && vm.friends.isEmpty() ->
-                    item { ListCard { EmptyText("아직 친구가 없습니다. 위에서 아이디로 요청을 보내보세요.") } }
+                    item { ListCard { EmptyText("아직 친구가 없습니다. 위에서 아이디로 요청을 보내보세요.", vertical = 40.dp) } }
 
                 vm.tab == FriendTab.Received && vm.received.isEmpty() ->
-                    item { ListCard { EmptyText("받은 친구 요청이 없습니다.") } }
+                    item { ListCard { EmptyText("받은 친구 요청이 없습니다.", vertical = 40.dp) } }
 
                 vm.tab == FriendTab.Sent && vm.sent.isEmpty() ->
-                    item { ListCard { EmptyText("보낸 친구 요청이 없습니다.") } }
+                    item { ListCard { EmptyText("보낸 친구 요청이 없습니다.", vertical = 40.dp) } }
 
                 vm.tab == FriendTab.Friends -> items(vm.friends, key = { it.friendsId }) { friend ->
                     ListCard {
@@ -474,13 +475,3 @@ private fun SmallButton(text: String, primary: Boolean, onClick: () -> Unit) {
     }
 }
 
-@Composable
-private fun EmptyText(text: String) {
-    Text(
-        text,
-        Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 40.dp),
-        fontSize = 13.sp,
-        color = SafeLightTheme.colors.textMuted,
-        textAlign = TextAlign.Center,
-    )
-}

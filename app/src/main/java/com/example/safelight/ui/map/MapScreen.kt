@@ -59,6 +59,9 @@ import com.google.android.gms.location.LocationServices
 import com.kakao.vectormap.KakaoMap
 import com.kakao.vectormap.LatLng
 import com.kakao.vectormap.camera.CameraUpdateFactory
+import com.example.safelight.ui.common.MapControlButton
+import com.example.safelight.ui.common.MapControlSurface
+import com.example.safelight.ui.common.hasLocationPermission
 
 private const val TAG = "MapScreen"
 
@@ -219,8 +222,7 @@ fun MapScreen(
         ) {
             LayerChip("cctv", SafeIcons.Cctv, "CCTV", vm.filters.cctv, vm::toggleFilter)
             LayerChip("streetLamp", SafeIcons.StreetLamp, "가로등", vm.filters.streetLamp, vm::toggleFilter)
-            // safeZone = 편의점(안전거점).
-            LayerChip("safeZone", SafeIcons.Store, "편의점", vm.filters.safeZone, vm::toggleFilter)
+            LayerChip("store", SafeIcons.Store, "편의점", vm.filters.store, vm::toggleFilter)
         }
 
         // ── 레이어 안내 ─────────────────────────────────────────────────────
@@ -535,55 +537,6 @@ private fun LayerChip(
     }
 }
 
-@Composable
-private fun LayerNotice(text: String, dotColor: Color) {
-    val colors = SafeLightTheme.colors
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
-        modifier = Modifier
-            .height(NOTICE_HEIGHT)
-            .clip(RoundedCornerShape(20.dp))
-            .background(colors.surface)
-            .border(1.dp, colors.border, RoundedCornerShape(20.dp))
-            .padding(horizontal = 9.dp),
-    ) {
-        Box(Modifier.size(8.dp).clip(CircleShape).background(dotColor))
-        Text(text, fontSize = 10.5.sp, fontWeight = FontWeight.SemiBold, color = colors.textMuted)
-    }
-}
-
-/** 웹의 흰 카드(surface + border + radius 11 + shadow)를 쓴 지도 컨트롤 껍데기. */
-@Composable
-private fun MapControlSurface(content: @Composable () -> Unit) {
-    val colors = SafeLightTheme.colors
-    Box(
-        Modifier
-            .clip(RoundedCornerShape(11.dp))
-            .background(colors.surface)
-            .border(1.dp, colors.border, RoundedCornerShape(11.dp)),
-    ) { content() }
-}
-
-@Composable
-private fun MapControlButton(onClick: () -> Unit, content: @Composable () -> Unit) {
-    Box(
-        Modifier.size(40.dp).clickable(onClick = onClick),
-        contentAlignment = Alignment.Center,
-    ) { content() }
-}
-
-private fun android.content.Context.hasLocationPermission() =
-    ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) ==
-        PackageManager.PERMISSION_GRANTED
-
-/** 경로 전체가 한 화면에 들어오게 카메라를 맞춘다(웹 `setBounds`). [paddingPx] 는 화면 픽셀이다. */
-private fun KakaoMap.fitToRoute(route: ActiveRoute, paddingPx: Int) {
-    if (route.path.isEmpty()) return
-    val points = route.path.map { LatLng.from(it.latitude, it.longitude) }.toTypedArray()
-    moveCamera(CameraUpdateFactory.fitMapPoints(points, paddingPx))
-}
-
 /**
  * 내 위치 표시. [recenter] 면 그 자리로 지도를 옮긴다 —
  * 사용자가 이미 다른 곳을 보고 있을 때 화면을 뺏지 않기 위해 마커만 찍는 경우와 나눈다.
@@ -606,4 +559,29 @@ private fun moveToMyLocation(
             onLocation(location.latitude, location.longitude)
         }
         .addOnFailureListener { Log.w(TAG, "위치 조회 실패", it) }
+}
+
+@Composable
+private fun LayerNotice(text: String, dotColor: Color) {
+    val colors = SafeLightTheme.colors
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        modifier = Modifier
+            .height(NOTICE_HEIGHT)
+            .clip(RoundedCornerShape(20.dp))
+            .background(colors.surface)
+            .border(1.dp, colors.border, RoundedCornerShape(20.dp))
+            .padding(horizontal = 9.dp),
+    ) {
+        Box(Modifier.size(8.dp).clip(CircleShape).background(dotColor))
+        Text(text, fontSize = 10.5.sp, fontWeight = FontWeight.SemiBold, color = colors.textMuted)
+    }
+}
+
+/** 경로 전체가 한 화면에 들어오게 카메라를 맞춘다(웹 `setBounds`). [paddingPx] 는 화면 픽셀이다. */
+private fun KakaoMap.fitToRoute(route: ActiveRoute, paddingPx: Int) {
+    if (route.path.isEmpty()) return
+    val points = route.path.map { LatLng.from(it.latitude, it.longitude) }.toTypedArray()
+    moveCamera(CameraUpdateFactory.fitMapPoints(points, paddingPx))
 }

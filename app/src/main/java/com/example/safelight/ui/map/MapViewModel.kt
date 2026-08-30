@@ -84,11 +84,11 @@ data class MapBounds(
 /** 지도에 그릴 편의점 하나. */
 data class StorePlace(val id: String, val name: String, val latitude: Double, val longitude: Double)
 
-/** 레이어 켬/끔. 웹 MainPage 의 `{ cctv: true, streetLamp: true, safeZone: true }` 와 같은 초기값이다. */
+/** 레이어 켬/끔. 웹 MainPage 의 `{ cctv: true, streetLamp: true, store: true }` 와 같은 초기값이다. */
 data class MapFilters(
     val cctv: Boolean = true,
     val streetLamp: Boolean = true,
-    val safeZone: Boolean = true,
+    val store: Boolean = true,
 )
 
 class MapViewModel : ViewModel() {
@@ -196,7 +196,7 @@ class MapViewModel : ViewModel() {
     fun toggleFilter(key: String) {
         filters = when (key) {
             "cctv" -> filters.copy(cctv = !filters.cctv)
-            "safeZone" -> filters.copy(safeZone = !filters.safeZone)
+            "store" -> filters.copy(store = !filters.store)
             "streetLamp" -> filters.copy(streetLamp = !filters.streetLamp)
             else -> return
         }
@@ -282,7 +282,7 @@ class MapViewModel : ViewModel() {
         // 이 시점 이후 도착하는 이전 검색 결과는 버린다 — 지도를 빠르게 움직이면 순서가 뒤집힌다.
         storeJob?.cancel()
 
-        if (!filters.safeZone) {
+        if (!filters.store) {
             visibleStores = emptyList()
             storeNotice = ""
             return
