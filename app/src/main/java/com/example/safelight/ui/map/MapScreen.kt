@@ -126,8 +126,8 @@ fun MapScreen(
     LaunchedEffect(vm.visibleLamps, mapReady) {
         layersHolder[0]?.drawLamps(vm.visibleLamps)
     }
-    LaunchedEffect(vm.visibleStores, vm.showStoreNames, mapReady) {
-        layersHolder[0]?.drawStores(vm.visibleStores, vm.showStoreNames)
+    LaunchedEffect(vm.visibleStores, mapReady) {
+        layersHolder[0]?.drawStores(vm.visibleStores)
     }
     LaunchedEffect(vm.dangerZones, mapReady) {
         layersHolder[0]?.drawDangerZones(vm.dangerZones)

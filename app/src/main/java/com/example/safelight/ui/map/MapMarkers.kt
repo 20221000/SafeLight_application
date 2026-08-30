@@ -70,20 +70,9 @@ class MapMarkers(context: Context) {
         return bitmap
     }
 
-    // ── 편의점 상호 알약 ────────────────────────────────────────────────────────
-    // 웹: background:{store 색} · color:#fff · padding:3px 8px · border-radius:12px
-    //     font-size:11px · font-weight:700 · border:1.5px solid #fff
-    //     box-shadow:0 2px 6px rgba(15,23,42,.28) · 아이콘 11px + gap 4px
-    fun storePill(name: String): Bitmap = pill(
-        text = name,
-        background = LayerColor.store,
-        cornerRadiusPx = 12f.px(),
-        iconPathData = STORE_ICON,
-        iconSizePx = 11f.px(),
-        iconGapPx = 4f.px(),
-        borderPx = 1.5f.px(),
-        shadowAlpha = 71,                   // .28
-    )
+    // 편의점 상호 알약(storePill)은 없앴다(2026-08-30, 웹도 같이). 알약 하나가 100px 가까이 돼서
+    // 지도의 상호·도로명을 덮었고, 편의점이 몰린 곳에서는 알약끼리 겹쳐 오히려 못 읽었다.
+    // 지금은 CCTV·가로등과 같은 dot() 하나로 그린다.
 
     // ── 위험구역 배지 ──────────────────────────────────────────────────────────
     // 웹: background:{레벨색} · padding:3px 8px · border-radius:6px · font-size:11px
@@ -282,9 +271,6 @@ class MapMarkers(context: Context) {
         const val MAP_PIN_ICON =
             "M12 21s7-6.4 7-11a7 7 0 1 0-14 0c0 4.6 7 11 7 11z" +
                 "M9.5 10a2.5 2.5 0 1 0 5 0a2.5 2.5 0 1 0 -5 0"
-        const val STORE_ICON =
-            "M6 4h12l3.5 5q-1.9 2.4-3.8 0q-1.9 2.4-3.8 0q-1.9 2.4-3.8 0q-1.9 2.4-3.8 0q-1.9 2.4-3.8 0L6 4z" +
-                "M4.6 10.6V20 M19.4 10.6V20 M9.4 20v-5.6h5.2V20"
         const val ALERT_TRIANGLE_ICON =
             "M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h16.9a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z" +
                 "M12 9v4 M12 17h.01"

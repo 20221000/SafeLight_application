@@ -10,6 +10,7 @@ import com.example.safelight.data.FacilityCache
 import com.example.safelight.data.net.BookmarkDto
 import com.example.safelight.data.net.BookmarkRequest
 import com.example.safelight.data.net.CctvDto
+import com.example.safelight.data.net.LocationDto
 import com.example.safelight.data.net.Network
 import com.example.safelight.data.net.RouteDto
 import com.example.safelight.data.net.RouteHistoryDto
@@ -17,7 +18,10 @@ import com.example.safelight.data.net.RouteRequest
 import com.example.safelight.data.net.SafeLightApi
 import com.example.safelight.data.net.errorMessage
 import com.example.safelight.ui.map.FACILITY_MIN_ZOOM
+import com.example.safelight.ui.map.LAMP_MIN_ZOOM
 import com.example.safelight.ui.map.MapBounds
+import com.example.safelight.ui.map.StorePlace
+import com.example.safelight.ui.map.collectStores
 import com.example.safelight.ui.search.SearchedPlace
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
@@ -128,12 +132,22 @@ class RouteViewModel : ViewModel() {
     var visibleCctv by mutableStateOf<List<CctvDto>>(emptyList())
         private set
 
+    /** 배경 가로등. CCTV 보다 한 단계 더 확대해야 그린다(개수가 7배다). */
+    var visibleLamps by mutableStateOf<List<LocationDto>>(emptyList())
+        private set
+
+    /** 배경 편의점. 백엔드에 영역 조회가 없어 카카오 로컬을 직접 부른다(StoreSearch.kt). */
+    var visibleStores by mutableStateOf<List<StorePlace>>(emptyList())
+        private set
+
     private var lastBounds: MapBounds? = null
     private var lastZoom: Int = FACILITY_MIN_ZOOM
 
     private var startSearchJob: Job? = null
     private var destSearchJob: Job? = null
     private var cctvJob: Job? = null
+    private var lampJob: Job? = null
+    private var storeJob: Job? = null
 
     init {
         loadBookmarks()
@@ -150,6 +164,8 @@ class RouteViewModel : ViewModel() {
         lastBounds = bounds
         lastZoom = zoom
         refreshCctv(bounds, zoom)
+        refreshLamps(bounds, zoom)
+        refreshStores(bounds, zoom)
     }
 
     /**
@@ -170,6 +186,49 @@ class RouteViewModel : ViewModel() {
                 .onFailure { Log.e(TAG, "CCTV 조회 실패", it) }
                 .getOrElse { return@launch }
             visibleCctv = list.filter { bounds.contains(it.latitude, it.longitude) }
+        }
+    }
+
+    /**
+     * 배경 가로등. CCTV 와 같은 처리인데 상한만 [LAMP_MIN_ZOOM] 으로 한 단계 높다 —
+     * 전국 보안등이 184만 개로 CCTV(25만)의 7배라 같은 축척에서 그리면 지도가 멎는다.
+     */
+    private fun refreshLamps(bounds: MapBounds, zoom: Int) {
+        if (zoom < LAMP_MIN_ZOOM || bounds.isTooWide()) {
+            visibleLamps = emptyList()
+            return
+        }
+        lampJob?.cancel()
+        lampJob = viewModelScope.launch {
+            val list = runCatching { FacilityCache.lamps.load(bounds) }
+                .onFailure { Log.e(TAG, "가로등 조회 실패", it) }
+                .getOrElse { return@launch }
+            visibleLamps = list.filter { bounds.contains(it.latitude, it.longitude) }
+        }
+    }
+
+    /**
+     * 배경 편의점. 여기만 출처가 다르다 — 백엔드에 '보이는 영역' 조회가 없어
+     * 지도 화면과 같은 소스(카카오 로컬 CS2)를 직접 부른다.
+     *
+     * 상호 라벨은 띄우지 않는다. 라벨 하나가 100px 가까이 돼서 경로 선을 덮는데,
+     * 이 화면은 길을 읽는 화면이라 배경이 길을 가리면 안 된다.
+     */
+    private fun refreshStores(bounds: MapBounds, zoom: Int) {
+        // 이 시점 이후 도착하는 이전 검색 결과는 버린다 — 지도를 빠르게 움직이면 순서가 뒤집힌다.
+        storeJob?.cancel()
+
+        if (zoom < FACILITY_MIN_ZOOM) {
+            visibleStores = emptyList()
+            return
+        }
+        storeJob = viewModelScope.launch {
+            val result = collectStores(bounds)
+            if (result.failed) {
+                Log.e(TAG, "편의점 조회 실패")
+                return@launch
+            }
+            visibleStores = result.places
         }
     }
 

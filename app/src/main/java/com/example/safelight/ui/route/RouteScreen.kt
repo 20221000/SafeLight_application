@@ -130,9 +130,19 @@ fun RouteScreen(
         vm.cameraTargetHandled()
     }
 
-    // 배경 CCTV — 지도 화면과 같은 규칙으로, 화면 안에 있는 것만 그린다.
+    // 배경 시설 — 지도 화면과 같은 규칙으로, 화면 안에 있는 것만 그린다.
+    // CCTV 만 그리던 시절에는 빨간 점만 깔려서, 정작 이 화면이 말하는 '가로등·편의점이 많아
+    // 안전한 길'의 근거가 지도에 안 보였다. 세 레이어를 다 깐다.
     LaunchedEffect(vm.visibleCctv, mapReady) {
         layersHolder[0]?.drawCctv(vm.visibleCctv, small = true)
+    }
+
+    LaunchedEffect(vm.visibleLamps, mapReady) {
+        layersHolder[0]?.drawLamps(vm.visibleLamps, small = true)
+    }
+
+    LaunchedEffect(vm.visibleStores, mapReady) {
+        layersHolder[0]?.drawStores(vm.visibleStores, small = true)
     }
 
     // 출발·도착 마커와 선택한 경로. 경로가 없어도 고른 곳은 바로 보여준다.
@@ -601,8 +611,21 @@ private fun BookmarkRow(
 private fun ResultCard(vm: RouteViewModel, onStartGuidance: (ActiveRoute) -> Unit) {
     val colors = SafeLightTheme.colors
     RouteCard("③ 추천 경로") {
+        // 막대 길이는 절대 점수가 아니라 **1순위 경로 대비**로 그린다.
+        //
+        // safetyScore 는 시설 개수의 가중합이라(CCTV×3 + 편의점×3 + 보안등×1 + 치안시설×4)
+        // 100 이 만점이 아니다 — 도심 경로는 수백 점, 외곽은 한 자리도 나온다. 100 을 기준으로 그리면
+        // 도심에서는 세 경로가 다 꽉 차고 외곽에서는 다 비어서, 어느 쪽이든 경로 사이 차이가 안 보인다.
+        // 1순위를 100% 로 두면 '2순위가 1순위의 몇 할인지'가 바로 읽힌다.
+        //
+        // routes 는 안전 점수 내림차순(rank 1 이 곧 첫 항목)이다.
+        val topScore = vm.routes.firstOrNull()?.safetyScore ?: 0
+
         vm.routes.forEach { ranked ->
             val selected = vm.selectedRoute?.rank == ranked.rank
+            // 전부 0점이면 채울 것이 없다(0 으로 나누는 것도 막는다).
+            val barRatio =
+                if (topScore > 0) (ranked.safetyScore.toFloat() / topScore).coerceIn(0f, 1f) else 0f
             Column(
                 Modifier
                     .fillMaxWidth()
@@ -647,7 +670,7 @@ private fun ResultCard(vm: RouteViewModel, onStartGuidance: (ActiveRoute) -> Uni
                         color = scoreColor(ranked.safetyScore),
                     )
                 }
-                // 점수 막대. 웹과 같이 100점을 가득 찬 것으로 본다.
+                // 점수 막대. 웹과 같이 1순위 경로를 가득 찬 것으로 본다.
                 Box(
                     Modifier
                         .fillMaxWidth()
@@ -658,7 +681,7 @@ private fun ResultCard(vm: RouteViewModel, onStartGuidance: (ActiveRoute) -> Uni
                 ) {
                     Box(
                         Modifier
-                            .fillMaxWidth(minOf(ranked.safetyScore / 100f, 1f))
+                            .fillMaxWidth(barRatio)
                             .height(5.dp)
                             .clip(RoundedCornerShape(3.dp))
                             .background(scoreColor(ranked.safetyScore)),

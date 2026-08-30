@@ -61,11 +61,9 @@ val FACILITY_MIN_ZOOM = fromWebLevel(4)
  */
 val LAMP_MIN_ZOOM = fromWebLevel(3)
 
-/**
- * 편의점 상호를 띄우는 최소 확대. 웹의 `STORE_NAME_MAX_LEVEL = 2` 와 같다.
- * 이보다 넓게 보면 라벨 폭(상호 길이만큼 늘어난다)이 서로 겹쳐 지도의 다른 정보를 가린다.
- */
-val STORE_NAME_MIN_ZOOM = fromWebLevel(2)
+// 편의점 상호 라벨은 없앴다(2026-08-30, 웹도 같이). 알약 하나가 100px 가까이 돼서
+// 지도의 상호·도로명을 덮었고, 편의점이 몰린 곳에서는 알약끼리 겹쳐 오히려 못 읽었다.
+// 지금은 CCTV·가로등과 같은 초록 점 하나로 통일한다.
 
 /** 지도를 열 때의 자리 — 웹 MapView 의 초기 center/level 과 같다. */
 const val INITIAL_LATITUDE = 37.4979

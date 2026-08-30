@@ -66,6 +66,9 @@ class MapLayers(
     private val storeLabels = labelLayer("stores", BASE_Z_ORDER + 5)
     // 경로 위 안전시설 점은 배경 CCTV 와 겹쳐도 보여야 하므로 그 위에 둔다(웹 zIndex 2 자리).
     private val routeFacilityLabels = labelLayer("routeFacilities", BASE_Z_ORDER + 6)
+    // 내 위치는 시설 점(가로등·CCTV·편의점) 위여야 한다 — 지도에서 '내가 어디인지'를 잃으면
+    // 나머지 정보가 다 무의미해진다. 웹은 zIndex 를 안 줘서 점들 밑에 묻혀 있었다(layerStyle.js
+    // 의 MY_LOCATION_Z 로 맞췄다). 이 줄을 시설 레이어 아래로 내리지 말 것.
     private val myLocationLabels = labelLayer("myLocation", BASE_Z_ORDER + 7)
     // 출발·도착과 검색 핀은 사용자가 직접 지정한 것이라 무엇에도 가리지 않게 맨 위에 둔다.
     private val routeEndpointLabels = labelLayer("routeEndpoints", BASE_Z_ORDER + 8)
@@ -125,29 +128,27 @@ class MapLayers(
         )
     }
 
-    /** 지도 화면의 가로등 점. CCTV 와 같은 크기(11dp)를 쓴다. */
-    fun drawLamps(items: List<LocationDto>) {
-        val style = lampDotStyle ?: return
+    /** 가로등 점. CCTV 와 같은 크기(11dp)를 쓰고, [small] 이면 경로 화면용 9dp 다. */
+    fun drawLamps(items: List<LocationDto>, small: Boolean = false) {
+        val style = (if (small) routeLampDotStyle else lampDotStyle) ?: return
         lampLabels?.putAll(
             items.map { LabelOptions.from(LatLng.from(it.latitude, it.longitude)).setStyles(style) },
         )
     }
 
-    /** [showNames] 면 상호가 붙은 알약을, 아니면 시설 점을 그린다(웹과 같은 규칙). */
-    fun drawStores(items: List<StorePlace>, showNames: Boolean) {
+    /**
+     * 편의점 점. [small] 은 경로 화면용 9dp 다.
+     *
+     * 예전에는 많이 확대하면 상호가 붙은 알약을 띄웠다. 알약 하나가 100px 가까이 돼서
+     * 지도의 상호·도로명을 덮었고, 편의점이 몰린 곳에서는 알약끼리 겹쳐 오히려 못 읽었다.
+     * CCTV·가로등과 같은 점으로 통일한다(웹도 같이 걷어냈다) —
+     * 상호는 지도가 이미 제 글씨로 보여준다.
+     */
+    fun drawStores(items: List<StorePlace>, small: Boolean = false) {
         val layer = storeLabels ?: return
-        if (!showNames) {
-            val style = storeDotStyle ?: return
-            layer.putAll(
-                items.map { LabelOptions.from(LatLng.from(it.latitude, it.longitude)).setStyles(style) },
-            )
-            return
-        }
+        val style = (if (small) routeStoreDotStyle else storeDotStyle) ?: return
         layer.putAll(
-            items.mapNotNull { store ->
-                val style = registerStyle(markers.storePill(store.name)) ?: return@mapNotNull null
-                LabelOptions.from(LatLng.from(store.latitude, store.longitude)).setStyles(style)
-            },
+            items.map { LabelOptions.from(LatLng.from(it.latitude, it.longitude)).setStyles(style) },
         )
     }
 

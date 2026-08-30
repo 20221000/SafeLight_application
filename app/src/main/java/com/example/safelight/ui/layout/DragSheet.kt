@@ -138,7 +138,8 @@ fun rememberDragSheetState(): DragSheetState {
 private enum class DragMode { Sheet, Scroll }
 
 /**
- * [head] 는 항상 보이는 제목 블록이다(이 높이가 mid 스냅이 된다).
+ * [head] 는 스크롤 영역 밖에 고정한 제목 블록이다. 이 높이가 곧 mid 스냅이라,
+ * 걸친 상태에서는 언제나 제목만 보인다.
  * [body] 는 시트를 끝까지 올렸을 때만 스크롤된다 — 그 전에는 본문을 끌어도 시트가 먼저 올라온다.
  */
 @Composable
@@ -229,26 +230,34 @@ fun DragSheet(
             )
         }
 
+        // 제목 블록은 **스크롤 영역 밖**에 고정한다. 안에 두면 시트를 다 올려 본문을 스크롤한
+        // 뒤 다시 내렸을 때, 스크롤된 만큼 제목이 위로 밀려 나가서 mid 높이에 제목 대신
+        // 본문 중간이 보인다(2026-08-30 기기에서 확인 — '안전 경로 안내' 자리에
+        // '저장된 북마크가 없습니다'가 나왔다).
+        //
+        // 밖에 두면 mid 높이(= 핸들 + 이 블록)가 언제나 제목 딱 한 덩어리와 맞아떨어져서,
+        // 시트를 몇 번을 올리고 내리든 걸친 상태에서는 제목만 보인다.
+        //
+        // 제목 블록은 언제나 시트를 움직인다(웹의 data-sheet-head). 시트를 다 올려 놓고
+        // 내용이 길 때, 본문은 스크롤이라 여기를 잡지 않으면 시트를 내릴 방법이 없다.
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .draggable(
+                    orientation = Orientation.Vertical,
+                    state = rememberDraggableState { state.dragBy(it) },
+                    onDragStopped = { state.settle() },
+                )
+                .onSizeChanged { state.headHeightPx = it.height.toFloat() },
+        ) { head() }
+
         Column(
             Modifier
                 .fillMaxWidth()
                 .nestedScroll(nestedScroll)
                 // 시트를 다 올렸을 때만 실제로 스크롤된다(그 전에는 위 nestedScroll 이 다 가져간다).
+                // mid 에서는 제목까지 쓰고 남는 높이가 0 이라 본문이 아예 안 보인다.
                 .verticalScroll(scroll),
-        ) {
-            // 제목 블록은 언제나 시트를 움직인다(웹의 data-sheet-head). 시트를 다 올려 놓고
-            // 내용이 길 때, 본문은 스크롤이라 여기를 잡지 않으면 시트를 내릴 방법이 없다.
-            Column(
-                Modifier
-                    .fillMaxWidth()
-                    .draggable(
-                        orientation = Orientation.Vertical,
-                        state = rememberDraggableState { state.dragBy(it) },
-                        onDragStopped = { state.settle() },
-                    )
-                    .onSizeChanged { state.headHeightPx = it.height.toFloat() },
-            ) { head() }
-            body()
-        }
+        ) { body() }
     }
 }

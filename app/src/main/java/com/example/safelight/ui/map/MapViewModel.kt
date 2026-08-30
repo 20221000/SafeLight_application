@@ -11,12 +11,9 @@ import com.example.safelight.data.net.CctvDto
 import com.example.safelight.data.net.DangerZoneDto
 import com.example.safelight.data.net.LocationDto
 import com.example.safelight.data.net.Network
-import com.example.safelight.data.net.PlaceDocument
 import com.example.safelight.data.net.SafeLightApi
 import com.example.safelight.data.net.unwrap
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -121,10 +118,6 @@ class MapViewModel : ViewModel() {
         private set
 
     var visibleStores by mutableStateOf<List<StorePlace>>(emptyList())
-        private set
-
-    /** 상호를 띄울 만큼 확대했는지. 넓게 보면 라벨끼리 겹쳐 지도를 가린다. */
-    var showStoreNames by mutableStateOf(false)
         private set
 
     var cctvNotice by mutableStateOf("")
@@ -299,10 +292,8 @@ class MapViewModel : ViewModel() {
             storeNotice = "지도를 확대하면 주변 편의점이 표시됩니다"
             return
         }
-        showStoreNames = zoom >= STORE_NAME_MIN_ZOOM
-
         storeJob = viewModelScope.launch {
-            val result = collectStores(bounds, 0)
+            val result = collectStores(bounds)
             if (result.failed) {
                 visibleStores = emptyList()
                 storeNotice = "편의점 정보를 불러오지 못했습니다"
@@ -318,68 +309,4 @@ class MapViewModel : ViewModel() {
         }
     }
 
-    private data class StoreResult(
-        val places: List<StorePlace>,
-        val capped: Boolean,
-        val failed: Boolean,
-    )
-
-    /**
-     * 45곳에서 잘린 영역만 4등분해 재귀로 파고든다. 마지막에 id 로 중복을 걷어낸다 —
-     * 이웃한 조각은 경계를 공유하므로 경계 위의 편의점이 양쪽 결과에 다 들어온다.
-     */
-    private suspend fun collectStores(bounds: MapBounds, depth: Int): StoreResult {
-        val area = searchArea(bounds)
-        if (area.failed) return StoreResult(emptyList(), capped = false, failed = true)
-        if (!area.capped || depth >= STORE_SPLIT_DEPTH) return area
-
-        val parts = viewModelScope.async {
-            bounds.split().map { async { collectStores(it, depth + 1) } }.awaitAll()
-        }.await()
-
-        val byId = LinkedHashMap<String, StorePlace>()
-        parts.forEach { part -> part.places.forEach { byId[it.id] = it } }
-        return StoreResult(
-            places = byId.values.toList(),
-            capped = parts.any { it.capped },
-            failed = parts.all { it.failed },
-        )
-    }
-
-    /** 한 영역을 끝까지(최대 3페이지) 훑는다. */
-    private suspend fun searchArea(bounds: MapBounds): StoreResult {
-        val found = LinkedHashMap<String, StorePlace>()
-        var page = 1
-        while (true) {
-            val response = runCatching {
-                Network.kakaoLocal.searchCategory(
-                    categoryGroupCode = STORE_CATEGORY,
-                    rect = bounds.toRect(),
-                    page = page,
-                )
-            }.getOrElse {
-                // 지도를 빠르게 움직이면 이전 검색이 취소된다. 그건 실패가 아니라 '이미 필요 없어진 일'이라
-                // 그대로 위로 던져 코루틴이 정상적으로 끝나게 둔다 — 삼키면 '불러오지 못했습니다'가 잘못 뜬다.
-                if (it is kotlinx.coroutines.CancellationException) throw it
-                Log.e(TAG, "편의점 조회 실패", it)
-                return StoreResult(emptyList(), capped = false, failed = true)
-            }
-
-            response.documents.forEach { it.toStore()?.let { s -> found[s.id] = s } }
-            if (response.meta.isEnd || page >= 3) break
-            page++
-        }
-        return StoreResult(
-            places = found.values.toList(),
-            capped = found.size >= STORE_PAGE_CAP,
-            failed = false,
-        )
-    }
-
-    /** 카카오는 경도를 x, 위도를 y 로 준다(위경도 순서가 뒤집혀 있다). */
-    private fun PlaceDocument.toStore(): StorePlace? {
-        val lat = y.toDoubleOrNull() ?: return null
-        val lng = x.toDoubleOrNull() ?: return null
-        return StorePlace(id = id, name = placeName, latitude = lat, longitude = lng)
-    }
 }
