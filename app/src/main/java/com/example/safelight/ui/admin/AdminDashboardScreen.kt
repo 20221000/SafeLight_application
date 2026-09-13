@@ -42,11 +42,12 @@ import com.example.safelight.ui.theme.SafeLightTheme
  */
 @Composable
 fun AdminDashboardScreen(
+    revision: Int,
     onOpenTab: (AdminTab) -> Unit,
     vm: AdminDashboardViewModel = viewModel(),
 ) {
     val colors = SafeLightTheme.colors
-    LaunchedEffect(Unit) { vm.start() }
+    LaunchedEffect(revision) { vm.sync(revision) }
 
     val dash = if (vm.loading) "-" else null
 

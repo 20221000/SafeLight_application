@@ -49,17 +49,21 @@ class AdminUserViewModel : ViewModel() {
     var message by mutableStateOf<String?>(null)
         private set
 
-    private var started = false
+    /** 회원을 고칠 때마다 오른다. 대시보드의 블랙리스트 수·최근 가입 표도 이 회원 목록에서 나온다. */
+    var usersRevision by mutableStateOf(0)
+        private set
+
+    private val revision = AdminRevision()
 
     fun messageShown() {
         message = null
     }
 
-    fun start() {
-        if (started) return
-        started = true
-        load()
-    }
+    /** 처음 열면 불러오고, 다른 탭에서 신고를 처리했으면(허위신고 횟수·블랙리스트가 바뀐다) 조용히 다시 받는다. */
+    fun sync(dataRevision: Int) =
+        revision.follow(dataRevision, first = { load() }, changed = { load(silent = true) })
+
+    fun reportChanges(notify: () -> Int) = revision.report(usersRevision, notify)
 
     /** 검색어에 걸린 사람들. 칩의 건수도 이 결과에서 센다(웹과 같다). */
     val searched: List<UserProfileDto>
@@ -85,8 +89,8 @@ class AdminUserViewModel : ViewModel() {
         UserFilter.Blacklisted -> searched.count { it.isBlacklisted }
     }
 
-    private fun load() {
-        loading = true
+    private fun load(silent: Boolean = false) {
+        if (!silent) loading = true
         error = null
         viewModelScope.launch {
             val response = runCatching { api.getAllUsers() }.getOrNull()
@@ -96,7 +100,7 @@ class AdminUserViewModel : ViewModel() {
             } else {
                 users = response.body()?.data.orEmpty()
             }
-            loading = false
+            if (!silent) loading = false
         }
     }
 
@@ -136,6 +140,7 @@ class AdminUserViewModel : ViewModel() {
             }
             editing = null
             message = "수정했습니다."
+            usersRevision++
             load()
         }
     }
@@ -170,6 +175,7 @@ class AdminUserViewModel : ViewModel() {
                 return@launch
             }
             message = note(response.body()?.data?.requiresRelogin == true)
+            usersRevision++
             load()
         }
     }
@@ -183,6 +189,7 @@ class AdminUserViewModel : ViewModel() {
                 return@launch
             }
             message = "'${user.nickname}' 을(를) 삭제했습니다."
+            usersRevision++
             load()
         }
     }

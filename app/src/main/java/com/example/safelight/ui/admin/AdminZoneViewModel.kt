@@ -59,11 +59,11 @@ class AdminZoneViewModel : ViewModel() {
     var message by mutableStateOf<String?>(null)
         private set
 
-    /** 신고를 처리할 때마다 오른다. 탭바의 '신고' 배지가 이걸 보고 다시 센다. */
+    /** 신고를 처리할 때마다 오른다. 탭바의 '신고' 배지와 다른 탭들이 이걸 보고 다시 읽는다. */
     var reportsRevision by mutableStateOf(0)
         private set
 
-    private var started = false
+    private val revision = AdminRevision()
     private var pollJob: Job? = null
 
     val highCount: Int get() = zones.count { it.dangerLevel == "HIGH" }
@@ -76,9 +76,17 @@ class AdminZoneViewModel : ViewModel() {
         message = null
     }
 
-    fun start() {
-        if (started) return
-        started = true
+    /**
+     * 처음 열면 불러오고 주기 갱신을 건다. 그 뒤로는 신고 탭에서 처리한 게 있으면 30초를 기다리지 않고
+     * 바로 다시 받는다 — 허위신고를 취소하면 구역의 신고 수·위험도가 즉시 바뀌는데
+     * 이 탭은 다음 주기까지(최대 30초) 옛 값을 보여줬다.
+     */
+    fun sync(dataRevision: Int) =
+        revision.follow(dataRevision, first = { start() }, changed = { load(silent = true) })
+
+    fun reportChanges(notify: () -> Int) = revision.report(reportsRevision, notify)
+
+    private fun start() {
         load()
         // 긴급신고가 들어오면 백엔드가 위험구역을 새로 만들거나 등급·신고수를 올린다
         // (EmergencyReportService.createReport). 그런데 이 화면은 처음 한 번만 읽고 있어서,

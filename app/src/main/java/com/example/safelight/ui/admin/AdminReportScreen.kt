@@ -69,7 +69,8 @@ const val CANCEL_FALSE_MESSAGE =
  */
 @Composable
 fun AdminReportScreen(
-    onReportsChanged: () -> Unit = {},
+    revision: Int,
+    onReportsChanged: () -> Int,
     vm: AdminReportViewModel = viewModel(),
 ) {
     val colors = SafeLightTheme.colors
@@ -80,16 +81,14 @@ fun AdminReportScreen(
     var confirmUnfalse by remember { mutableStateOf<EmergencyReportDto?>(null) }
     var locationTarget by remember { mutableStateOf<EmergencyReportDto?>(null) }
 
-    LaunchedEffect(Unit) { vm.start() }
+    LaunchedEffect(revision) { vm.sync(revision) }
     LaunchedEffect(vm.message) {
         val text = vm.message ?: return@LaunchedEffect
         snackbar.showSnackbar(text)
         vm.messageShown()
     }
-    // 방금 처리한 건이 탭바 배지에서도 바로 빠지게 한다.
-    LaunchedEffect(vm.reportsRevision) {
-        if (vm.reportsRevision > 0) onReportsChanged()
-    }
+    // 방금 처리한 건이 탭바 배지와 다른 탭(대시보드·회원·위험구역)에도 바로 반영되게 한다.
+    LaunchedEffect(vm.reportsRevision) { vm.reportChanges(onReportsChanged) }
 
     Scaffold(
         containerColor = colors.bg,

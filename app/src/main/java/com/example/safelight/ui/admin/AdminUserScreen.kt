@@ -51,6 +51,8 @@ import com.example.safelight.ui.theme.SafeLightTheme
 @Composable
 fun AdminUserScreen(
     selfUserId: Long?,
+    revision: Int,
+    onUsersChanged: () -> Int,
     vm: AdminUserViewModel = viewModel(),
 ) {
     val colors = SafeLightTheme.colors
@@ -59,7 +61,8 @@ fun AdminUserScreen(
     // 블랙리스트·권한·삭제는 되돌리는 값이 서로 달라서 확인창 하나에 무엇을 물을지만 담아 넘긴다.
     var confirm by remember { mutableStateOf<UserConfirm?>(null) }
 
-    LaunchedEffect(Unit) { vm.start() }
+    LaunchedEffect(revision) { vm.sync(revision) }
+    LaunchedEffect(vm.usersRevision) { vm.reportChanges(onUsersChanged) }
     LaunchedEffect(vm.message) {
         val text = vm.message ?: return@LaunchedEffect
         snackbar.showSnackbar(text)

@@ -49,18 +49,17 @@ class AdminDashboardViewModel : ViewModel() {
     val totalUsers: Long get() = summaryUsers ?: users.size.toLong()
     val blacklistCount: Int get() = users.count { it.isBlacklisted }
 
-    private var loaded = false
+    private val revision = AdminRevision()
 
-    fun start() {
-        if (loaded) return
-        loaded = true
-        load()
-    }
+    /** 처음 열면 불러오고, 다른 탭에서 신고·회원을 처리했으면 숫자를 띄워 둔 채 조용히 다시 받는다. */
+    fun sync(dataRevision: Int) =
+        revision.follow(dataRevision, first = { load() }, changed = { load(silent = true) })
 
     fun refresh() = load()
 
-    private fun load() {
-        loading = true
+    /** [silent] 면 KPI 를 '-' 로 비우지 않는다 — 다시 받는 사이 숫자가 깜빡이면 오히려 헷갈린다. */
+    private fun load(silent: Boolean = false) {
+        if (!silent) loading = true
         error = null
         viewModelScope.launch {
             // 한 곳이 실패해도 나머지 숫자는 살린다. 게시글 집계를 못 받았다고
@@ -87,7 +86,7 @@ class AdminDashboardViewModel : ViewModel() {
                 todayPosts = it.todayPosts
                 summaryUsers = it.totalUsers
             }
-            loading = false
+            if (!silent) loading = false
         }
     }
 

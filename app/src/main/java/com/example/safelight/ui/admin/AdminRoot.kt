@@ -24,10 +24,13 @@ fun AdminRoot(selfUserId: Long?, onExit: () -> Unit, onLogout: () -> Unit) {
     // '신고' 배지 = 활성 위험구역들의 신고수 합계. 웹 AdminShell 과 같은 셈법이다
     // (서버가 허위 건을 빼고 다시 세므로, 허위로 처리하면 이 숫자가 줄어든다).
     var reportCount by remember { mutableIntStateOf(0) }
-    var badgeRevision by remember { mutableIntStateOf(0) }
+    // 관리자 데이터가 바뀐 번호. 신고·회원을 처리한 탭이 올리고, 모든 탭이 이 값에 맞춰 다시 읽는다([AdminRevision]).
+    var dataRevision by remember { mutableIntStateOf(0) }
+    // 올린 뒤의 번호를 돌려준다. 변경을 낸 탭은 그 번호를 '이미 반영함'으로 적어 두고 다시 읽지 않는다.
+    val onDataChanged: () -> Int = { ++dataRevision }
 
     val api = remember { Network.backend(SafeLightApi::class.java) }
-    LaunchedEffect(badgeRevision) {
+    LaunchedEffect(dataRevision) {
         val envelope = runCatching { api.getDangerZones() }.getOrNull()
         // 실패하면 배지를 건드리지 않는다 — 네트워크 오류로 '처리할 신고 없음'처럼 보이면 안 된다.
         if (envelope?.success == true) {
@@ -43,10 +46,10 @@ fun AdminRoot(selfUserId: Long?, onExit: () -> Unit, onLogout: () -> Unit) {
         reportCount = reportCount,
     ) {
         when (tab) {
-            AdminTab.Dashboard -> AdminDashboardScreen(onOpenTab = { tab = it })
-            AdminTab.Reports -> AdminReportScreen(onReportsChanged = { badgeRevision++ })
-            AdminTab.Users -> AdminUserScreen(selfUserId = selfUserId)
-            AdminTab.DangerZones -> AdminZoneScreen(onReportsChanged = { badgeRevision++ })
+            AdminTab.Dashboard -> AdminDashboardScreen(revision = dataRevision, onOpenTab = { tab = it })
+            AdminTab.Reports -> AdminReportScreen(revision = dataRevision, onReportsChanged = onDataChanged)
+            AdminTab.Users -> AdminUserScreen(selfUserId = selfUserId, revision = dataRevision, onUsersChanged = onDataChanged)
+            AdminTab.DangerZones -> AdminZoneScreen(revision = dataRevision, onReportsChanged = onDataChanged)
             AdminTab.Notices -> AdminNoticeScreen()
         }
     }

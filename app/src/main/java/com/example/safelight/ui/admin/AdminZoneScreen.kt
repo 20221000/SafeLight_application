@@ -65,7 +65,8 @@ private const val ZONE_ZOOM = 16
  */
 @Composable
 fun AdminZoneScreen(
-    onReportsChanged: () -> Unit = {},
+    revision: Int,
+    onReportsChanged: () -> Int,
     vm: AdminZoneViewModel = viewModel(),
 ) {
     val colors = SafeLightTheme.colors
@@ -82,15 +83,13 @@ fun AdminZoneScreen(
     var fitted by remember { mutableStateOf(false) }
     val fitPadding = with(LocalDensity.current) { 24.dp.roundToPx() }
 
-    LaunchedEffect(Unit) { vm.start() }
+    LaunchedEffect(revision) { vm.sync(revision) }
     LaunchedEffect(vm.message) {
         val text = vm.message ?: return@LaunchedEffect
         snackbar.showSnackbar(text)
         vm.messageShown()
     }
-    LaunchedEffect(vm.reportsRevision) {
-        if (vm.reportsRevision > 0) onReportsChanged()
-    }
+    LaunchedEffect(vm.reportsRevision) { vm.reportChanges(onReportsChanged) }
     // 고른 구역은 테두리를 굵게, 채움을 진하게 그린다(웹과 같다). 그래서 focusId 도 키다.
     LaunchedEffect(vm.zones, vm.focusId, mapReady) {
         layersHolder[0]?.drawDangerZones(vm.zones, selectedId = vm.focusId)

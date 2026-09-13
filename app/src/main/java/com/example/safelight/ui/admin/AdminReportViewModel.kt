@@ -65,15 +65,14 @@ class AdminReportViewModel : ViewModel() {
         private set
 
     /**
-     * 신고를 하나 처리할 때마다 오른다. 탭바의 '신고' 배지가 이걸 보고 다시 센다 —
-     * 허위로 처리하면 서버 쪽 집계에서 그 건이 빠지는데, 배지는 콘솔을 다시 열기 전까지
-     * 옛 숫자를 들고 있었다.
+     * 신고를 하나 처리할 때마다 오른다. 탭바의 '신고' 배지와 다른 탭들이 이걸 보고 다시 읽는다 —
+     * 허위신고를 확정·취소하면 신고자의 허위신고 횟수·블랙리스트, 구역의 신고 수·위험도가 함께 바뀐다.
      */
     var reportsRevision by mutableStateOf(0)
         private set
 
     private var debounceJob: Job? = null
-    private var started = false
+    private val revision = AdminRevision()
 
     /** 기간을 거꾸로 넣으면 백엔드가 400 을 던지므로 미리 막는다. */
     val invalidRange: Boolean
@@ -87,11 +86,14 @@ class AdminReportViewModel : ViewModel() {
         message = null
     }
 
-    fun start() {
-        if (started) return
-        started = true
-        reload()
-    }
+    /**
+     * 처음 열면 불러오고, 위험구역·회원 탭에서 처리한 게 있으면 목록을 띄워 둔 채 첫 페이지부터 다시 받는다.
+     * 위험구역 상세에서도 허위신고를 확정·취소할 수 있어서, 이 탭에 돌아왔을 때 옛 상태가 남아 있었다.
+     */
+    fun sync(dataRevision: Int) =
+        revision.follow(dataRevision, first = { reload() }, changed = { reload(silent = true) })
+
+    fun reportChanges(notify: () -> Int) = revision.report(reportsRevision, notify)
 
     fun selectFilter(next: ReportFilter) {
         if (filter == next) return
@@ -132,9 +134,9 @@ class AdminReportViewModel : ViewModel() {
     }
 
     /** 필터가 바뀌면 언제나 첫 페이지부터 다시 받는다. */
-    private fun reload() {
+    private fun reload(silent: Boolean = false) {
         if (invalidRange) return
-        loadPage(0, append = false)
+        loadPage(0, append = false, silent = silent)
         loadStats()
     }
 
@@ -143,8 +145,8 @@ class AdminReportViewModel : ViewModel() {
         loadPage(page + 1, append = true)
     }
 
-    private fun loadPage(target: Int, append: Boolean) {
-        loading = true
+    private fun loadPage(target: Int, append: Boolean, silent: Boolean = false) {
+        if (!silent) loading = true
         error = null
         viewModelScope.launch {
             val result = api.reportPage(filter, searchTerm, startDate, endDate, target, PAGE_SIZE)
@@ -156,7 +158,7 @@ class AdminReportViewModel : ViewModel() {
                 totalElements = result.totalElements.toInt()
                 isLast = result.last
             }
-            loading = false
+            if (!silent) loading = false
         }
     }
 
