@@ -8,11 +8,15 @@ import androidx.compose.ui.graphics.Color
  */
 
 // 레이어별 점 색. 내 위치가 파란 원이라 CCTV 도 파랑이면 둘을 구분할 수 없다 —
-// CCTV 빨강 / 가로등 노랑 / 편의점 초록으로 나눠 파랑은 '내 위치' 전용으로 남긴다.
+// CCTV 빨강 / 가로등 노랑 / 편의점 초록으로 나눠 파랑은 '내 위치' 전용으로 남겼었다.
+//
+// 치안시설(지구대·파출소 등)은 경찰을 떠올리게 파랑으로 한다. 대신 내 위치(밝은 파랑)와
+// 헷갈리지 않게 짙은 남색으로 둔다(웹 layerStyle.js 와 같은 값).
 object LayerColor {
     val cctv = Color(0xFFE11D48)
     val streetLamp = Color(0xFFF59E0B)
     val store = Color(0xFF10B981)
+    val police = Color(0xFF1E40AF)
 }
 
 /**

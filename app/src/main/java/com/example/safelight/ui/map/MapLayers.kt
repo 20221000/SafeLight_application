@@ -6,6 +6,7 @@ import androidx.compose.ui.graphics.toArgb
 import com.example.safelight.data.net.CctvDto
 import com.example.safelight.data.net.DangerZoneDto
 import com.example.safelight.data.net.LocationDto
+import com.example.safelight.data.net.PoliceFacilityDto
 import com.kakao.vectormap.KakaoMap
 import com.kakao.vectormap.LatLng
 import com.kakao.vectormap.label.CompetitionType
@@ -64,15 +65,17 @@ class MapLayers(
     private val lampLabels = labelLayer("lamps", BASE_Z_ORDER + 3)
     private val cctvLabels = labelLayer("cctv", BASE_Z_ORDER + 4)
     private val storeLabels = labelLayer("stores", BASE_Z_ORDER + 5)
-    // 경로 위 안전시설 점은 배경 CCTV 와 겹쳐도 보여야 하므로 그 위에 둔다(웹 zIndex 2 자리).
-    private val routeFacilityLabels = labelLayer("routeFacilities", BASE_Z_ORDER + 6)
+    // 치안시설은 동네에 몇 곳뿐이라 배경 시설 중 맨 위에 둔다(웹 POLICE_Z = 4).
+    private val policeLabels = labelLayer("police", BASE_Z_ORDER + 6)
+    // 경로 위 안전시설 점은 배경 CCTV 와 겹쳐도 보여야 하므로 그 위에 둔다(웹 zIndex 5 자리).
+    private val routeFacilityLabels = labelLayer("routeFacilities", BASE_Z_ORDER + 7)
     // 내 위치는 시설 점(가로등·CCTV·편의점) 위여야 한다 — 지도에서 '내가 어디인지'를 잃으면
     // 나머지 정보가 다 무의미해진다. 웹은 zIndex 를 안 줘서 점들 밑에 묻혀 있었다(layerStyle.js
     // 의 MY_LOCATION_Z 로 맞췄다). 이 줄을 시설 레이어 아래로 내리지 말 것.
-    private val myLocationLabels = labelLayer("myLocation", BASE_Z_ORDER + 7)
+    private val myLocationLabels = labelLayer("myLocation", BASE_Z_ORDER + 8)
     // 출발·도착과 검색 핀은 사용자가 직접 지정한 것이라 무엇에도 가리지 않게 맨 위에 둔다.
-    private val routeEndpointLabels = labelLayer("routeEndpoints", BASE_Z_ORDER + 8)
-    private val searchLabels = labelLayer("search", BASE_Z_ORDER + 9)
+    private val routeEndpointLabels = labelLayer("routeEndpoints", BASE_Z_ORDER + 9)
+    private val searchLabels = labelLayer("search", BASE_Z_ORDER + 10)
 
     // 점 모양은 모든 마커가 같으니 스타일을 한 번만 등록해 돌려 쓴다.
     // 지도를 움직일 때마다 새로 등록하면 SDK 의 스타일 표가 계속 불어난다.
@@ -80,6 +83,7 @@ class MapLayers(
     private val cctvDotStyle by lazy { registerStyle(markers.dot(LayerColor.cctv)) }
     private val storeDotStyle by lazy { registerStyle(markers.dot(LayerColor.store)) }
     private val lampDotStyle by lazy { registerStyle(markers.dot(LayerColor.streetLamp)) }
+    private val policeDotStyle by lazy { registerStyle(markers.dot(LayerColor.police)) }
     private val myLocationStyle by lazy { registerStyle(markers.myLocation()) }
     private val routeCctvDotStyle by lazy {
         registerStyle(markers.dot(LayerColor.cctv, ROUTE_DOT_SIZE_DP))
@@ -89,6 +93,9 @@ class MapLayers(
     }
     private val routeLampDotStyle by lazy {
         registerStyle(markers.dot(LayerColor.streetLamp, ROUTE_DOT_SIZE_DP))
+    }
+    private val routePoliceDotStyle by lazy {
+        registerStyle(markers.dot(LayerColor.police, ROUTE_DOT_SIZE_DP))
     }
 
     /**
@@ -132,6 +139,14 @@ class MapLayers(
     fun drawLamps(items: List<LocationDto>, small: Boolean = false) {
         val style = (if (small) routeLampDotStyle else lampDotStyle) ?: return
         lampLabels?.putAll(
+            items.map { LabelOptions.from(LatLng.from(it.latitude, it.longitude)).setStyles(style) },
+        )
+    }
+
+    /** 치안시설 점(짙은 남색). [small] 이면 경로 화면용 9dp 다. */
+    fun drawPolice(items: List<PoliceFacilityDto>, small: Boolean = false) {
+        val style = (if (small) routePoliceDotStyle else policeDotStyle) ?: return
+        policeLabels?.putAll(
             items.map { LabelOptions.from(LatLng.from(it.latitude, it.longitude)).setStyles(style) },
         )
     }
@@ -233,6 +248,7 @@ class MapLayers(
         cctvLocations: List<LocationDto> = emptyList(),
         storeLocations: List<LocationDto> = emptyList(),
         lampLocations: List<LocationDto> = emptyList(),
+        policeLocations: List<LocationDto> = emptyList(),
     ) {
         routeLines?.removeAll()
         routeEndpointLabels?.removeAll()
@@ -271,6 +287,7 @@ class MapLayers(
             routeLampDotStyle?.let { style -> lampLocations.forEach { add(it to style) } }
             routeCctvDotStyle?.let { style -> cctvLocations.forEach { add(it to style) } }
             routeStoreDotStyle?.let { style -> storeLocations.forEach { add(it to style) } }
+            routePoliceDotStyle?.let { style -> policeLocations.forEach { add(it to style) } }
         }
         routeFacilityLabels?.putAll(
             facilities.map { (location, style) ->

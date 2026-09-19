@@ -4,6 +4,7 @@ import android.util.Log
 import com.example.safelight.data.net.CctvDto
 import com.example.safelight.data.net.LocationDto
 import com.example.safelight.data.net.Network
+import com.example.safelight.data.net.PoliceFacilityDto
 import com.example.safelight.data.net.SafeLightApi
 import com.example.safelight.data.net.unwrap
 import com.example.safelight.ui.map.MapBounds
@@ -13,7 +14,7 @@ import kotlinx.coroutines.sync.withLock
 private const val TAG = "FacilityCache"
 
 /**
- * 지도 위 안전시설(CCTV·가로등)을 '지금 보이는 범위'만 받아 둔다.
+ * 지도 위 안전시설(CCTV·가로등·치안시설)을 '지금 보이는 범위'만 받아 둔다.
  *
  * 예전 CctvCache 는 전국 목록을 앱에서 한 벌 통째로 들고 있었다. 백엔드가 서울 CSV 대신
  * 전국 공공데이터를 쓰게 되면서 CCTV 25만·가로등 184만 건이 되었고, 전체 조회는
@@ -59,19 +60,28 @@ object FacilityCache {
 
     val cctv = BoundsCache<CctvDto>("CCTV") { bounds ->
         api.getCctvs(
-            minLatitude = bounds.minLat,
-            maxLatitude = bounds.maxLat,
-            minLongitude = bounds.minLng,
-            maxLongitude = bounds.maxLng,
+            minLat = bounds.minLat,
+            maxLat = bounds.maxLat,
+            minLng = bounds.minLng,
+            maxLng = bounds.maxLng,
         ).unwrap()
     }
 
     val lamps = BoundsCache<LocationDto>("가로등") { bounds ->
         api.getSecurityLights(
-            minLatitude = bounds.minLat,
-            maxLatitude = bounds.maxLat,
-            minLongitude = bounds.minLng,
-            maxLongitude = bounds.maxLng,
+            minLat = bounds.minLat,
+            maxLat = bounds.maxLat,
+            minLng = bounds.minLng,
+            maxLng = bounds.maxLng,
+        ).unwrap()
+    }
+
+    val police = BoundsCache<PoliceFacilityDto>("치안시설") { bounds ->
+        api.getPoliceFacilities(
+            minLat = bounds.minLat,
+            maxLat = bounds.maxLat,
+            minLng = bounds.minLng,
+            maxLng = bounds.maxLng,
         ).unwrap()
     }
 }

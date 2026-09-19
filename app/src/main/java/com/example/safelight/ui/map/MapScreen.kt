@@ -132,6 +132,9 @@ fun MapScreen(
     LaunchedEffect(vm.visibleStores, mapReady) {
         layersHolder[0]?.drawStores(vm.visibleStores)
     }
+    LaunchedEffect(vm.visiblePolice, mapReady) {
+        layersHolder[0]?.drawPolice(vm.visiblePolice)
+    }
     LaunchedEffect(vm.dangerZones, mapReady) {
         layersHolder[0]?.drawDangerZones(vm.dangerZones)
     }
@@ -223,6 +226,7 @@ fun MapScreen(
             LayerChip("cctv", SafeIcons.Cctv, "CCTV", vm.filters.cctv, vm::toggleFilter)
             LayerChip("streetLamp", SafeIcons.StreetLamp, "가로등", vm.filters.streetLamp, vm::toggleFilter)
             LayerChip("store", SafeIcons.Store, "편의점", vm.filters.store, vm::toggleFilter)
+            LayerChip("police", SafeIcons.Shield, "치안시설", vm.filters.police, vm::toggleFilter)
         }
 
         // ── 레이어 안내 ─────────────────────────────────────────────────────
@@ -240,6 +244,7 @@ fun MapScreen(
                 vm.cctvNotice to LayerColor.cctv,
                 vm.lampNotice to LayerColor.streetLamp,
                 vm.storeNotice to LayerColor.store,
+                vm.policeNotice to LayerColor.police,
             )
                 .filter { it.first.isNotEmpty() }
                 .forEach { (text, color) -> LayerNotice(text, color) }

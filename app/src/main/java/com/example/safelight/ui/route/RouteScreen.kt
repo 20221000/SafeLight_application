@@ -149,6 +149,10 @@ fun RouteScreen(
         layersHolder[0]?.drawStores(vm.visibleStores, small = true)
     }
 
+    LaunchedEffect(vm.visiblePolice, mapReady) {
+        layersHolder[0]?.drawPolice(vm.visiblePolice, small = true)
+    }
+
     // 출발·도착 마커와 선택한 경로. 경로가 없어도 고른 곳은 바로 보여준다.
     LaunchedEffect(vm.selectedStart, vm.selectedDest, vm.selectedRoute, mapReady) {
         val layers = layersHolder[0] ?: return@LaunchedEffect
@@ -160,6 +164,7 @@ fun RouteScreen(
             cctvLocations = route?.cctvLocations.orEmpty(),
             storeLocations = route?.storeLocations.orEmpty(),
             lampLocations = route?.securityLightLocations.orEmpty(),
+            policeLocations = route?.policeFacilityLocations.orEmpty(),
         )
         val points = route?.path.orEmpty()
         if (points.isNotEmpty()) {
@@ -262,7 +267,7 @@ fun RouteScreen(
                         color = colors.textStrong,
                     )
                     Text(
-                        "CCTV·가로등·편의점 밀집도로 안전한 길을 찾습니다",
+                        "CCTV·가로등·편의점·치안시설 밀집도로 안전한 길을 찾습니다",
                         fontSize = 12.5.sp,
                         color = colors.textMuted,
                         modifier = Modifier.padding(top = 2.dp),
@@ -692,7 +697,7 @@ private fun ResultCard(vm: RouteViewModel, onStartGuidance: (ActiveRoute) -> Uni
                     )
                 }
                 // 합계만 보면 무엇이 많아서 높은지 알 수 없어 내역을 같이 보여준다.
-                // 셋이 한 줄에 안 들어가면 접는다 — 보안등 수는 네 자리까지 간다(웹도 flexWrap).
+                // 넷이 한 줄에 안 들어가면 접는다 — 보안등 수는 네 자리까지 간다(웹도 flexWrap).
                 FlowRow(
                     Modifier.padding(top = 8.dp),
                     horizontalArrangement = Arrangement.spacedBy(10.dp),
@@ -701,6 +706,7 @@ private fun ResultCard(vm: RouteViewModel, onStartGuidance: (ActiveRoute) -> Uni
                     FacilityCount(LayerColor.cctv, "CCTV ${ranked.cctvCount}")
                     FacilityCount(LayerColor.streetLamp, "가로등 ${ranked.lampCount}")
                     FacilityCount(LayerColor.store, "편의점 ${ranked.storeCount}")
+                    FacilityCount(LayerColor.police, "치안시설 ${ranked.policeCount}")
                 }
                 if (ranked.route.description.isNotBlank()) {
                     Text(

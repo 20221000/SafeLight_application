@@ -11,6 +11,7 @@ import com.example.safelight.data.net.CctvDto
 import com.example.safelight.data.net.DangerZoneDto
 import com.example.safelight.data.net.LocationDto
 import com.example.safelight.data.net.Network
+import com.example.safelight.data.net.PoliceFacilityDto
 import com.example.safelight.data.net.SafeLightApi
 import com.example.safelight.data.net.unwrap
 import kotlinx.coroutines.Job
@@ -20,8 +21,11 @@ import kotlinx.coroutines.launch
 
 private const val TAG = "MapViewModel"
 
-/** 백엔드 MapBounds.MAX_SPAN_DEGREE 와 같은 값. 이보다 넓게 요청하면 400 이다. */
-const val MAX_SPAN_DEGREE = 0.5
+/** 백엔드 CctvService·SecurityLightService 의 MAX_BBOX_RANGE 와 같은 값. 이보다 넓게 요청하면 400 이다. */
+const val MAX_SPAN_DEGREE = 0.1
+
+/** 여유분을 상한에 딱 맞추면 부동소수점 오차로 0.1 을 살짝 넘어 400 이 날 수 있어 조금 덜 채운다. */
+private const val PAD_LIMIT = MAX_SPAN_DEGREE * 0.99
 
 /** 받아 둘 범위를 화면보다 이만큼 넓게 잡는다. */
 private const val PAD_RATIO = 0.5
@@ -55,8 +59,8 @@ data class MapBounds(
     fun padded(): MapBounds {
         val latSpan = maxLat - minLat
         val lngSpan = maxLng - minLng
-        val latPad = minOf(latSpan * PAD_RATIO / 2, maxOf(0.0, (MAX_SPAN_DEGREE - latSpan) / 2))
-        val lngPad = minOf(lngSpan * PAD_RATIO / 2, maxOf(0.0, (MAX_SPAN_DEGREE - lngSpan) / 2))
+        val latPad = minOf(latSpan * PAD_RATIO / 2, maxOf(0.0, (PAD_LIMIT - latSpan) / 2))
+        val lngPad = minOf(lngSpan * PAD_RATIO / 2, maxOf(0.0, (PAD_LIMIT - lngSpan) / 2))
         return MapBounds(
             minLat = minLat - latPad,
             minLng = minLng - lngPad,
@@ -84,11 +88,12 @@ data class MapBounds(
 /** 지도에 그릴 편의점 하나. */
 data class StorePlace(val id: String, val name: String, val latitude: Double, val longitude: Double)
 
-/** 레이어 켬/끔. 웹 MainPage 의 `{ cctv: true, streetLamp: true, store: true }` 와 같은 초기값이다. */
+/** 레이어 켬/끔. 웹 MainPage 의 `{ cctv: true, streetLamp: true, store: true, police: true }` 와 같은 초기값이다. */
 data class MapFilters(
     val cctv: Boolean = true,
     val streetLamp: Boolean = true,
     val store: Boolean = true,
+    val police: Boolean = true,
 )
 
 class MapViewModel : ViewModel() {
@@ -120,6 +125,9 @@ class MapViewModel : ViewModel() {
     var visibleStores by mutableStateOf<List<StorePlace>>(emptyList())
         private set
 
+    var visiblePolice by mutableStateOf<List<PoliceFacilityDto>>(emptyList())
+        private set
+
     var cctvNotice by mutableStateOf("")
         private set
 
@@ -129,12 +137,16 @@ class MapViewModel : ViewModel() {
     var storeNotice by mutableStateOf("")
         private set
 
+    var policeNotice by mutableStateOf("")
+        private set
+
     private var lastBounds: MapBounds? = null
     private var lastZoom: Int = INITIAL_ZOOM
     private var storeJob: Job? = null
     private var cctvJob: Job? = null
     private var zoneRefreshJob: Job? = null
     private var lampJob: Job? = null
+    private var policeJob: Job? = null
 
     init {
         pollDangerZones()
@@ -198,6 +210,7 @@ class MapViewModel : ViewModel() {
             "cctv" -> filters.copy(cctv = !filters.cctv)
             "store" -> filters.copy(store = !filters.store)
             "streetLamp" -> filters.copy(streetLamp = !filters.streetLamp)
+            "police" -> filters.copy(police = !filters.police)
             else -> return
         }
         lastBounds?.let { onCameraIdle(it, lastZoom) }
@@ -210,6 +223,36 @@ class MapViewModel : ViewModel() {
         refreshCctv(bounds, zoom)
         refreshLamps(bounds, zoom)
         refreshStores(bounds, zoom)
+        refreshPolice(bounds, zoom)
+    }
+
+    /** 보이는 범위의 치안시설. CCTV 와 같은 규칙(같은 확대부터, 같은 범위 상한)이다. */
+    private fun refreshPolice(bounds: MapBounds, zoom: Int) {
+        if (!filters.police) {
+            visiblePolice = emptyList()
+            policeNotice = ""
+            return
+        }
+        if (zoom < FACILITY_MIN_ZOOM || bounds.isTooWide()) {
+            visiblePolice = emptyList()
+            policeNotice = "지도를 확대하면 주변 치안시설이 표시됩니다"
+            return
+        }
+        policeJob?.cancel()
+        policeJob = viewModelScope.launch {
+            val list = runCatching { FacilityCache.police.load(bounds) }
+                .onFailure { Log.e(TAG, "치안시설 조회 실패", it) }
+                .getOrElse {
+                    policeNotice = "치안시설 정보를 불러오지 못했습니다"
+                    return@launch
+                }
+            // 기다리는 사이 칩이 꺼졌으면 그리지 않는다.
+            if (!filters.police) return@launch
+            val inBounds = list.filter { bounds.contains(it.latitude, it.longitude) }
+            visiblePolice = inBounds
+            policeNotice =
+                if (inBounds.isEmpty()) "이 지역에는 치안시설이 없습니다" else "치안시설 ${inBounds.size}곳"
+        }
     }
 
     /**

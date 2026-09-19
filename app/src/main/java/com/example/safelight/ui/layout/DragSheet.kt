@@ -41,7 +41,6 @@ import com.example.safelight.ui.theme.SafeLightTheme
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
-import kotlin.math.abs
 
 /** 핸들 바만 남은 높이. 웹 BottomSheet 의 SHEET_COLLAPSED 와 같다. */
 val SHEET_COLLAPSED = 26.dp
@@ -55,16 +54,26 @@ private val SHEET_PEEK = 132.dp
 /** 다 올렸을 때 화면에서 차지하는 비율(웹 useDragSheet 의 fullRatio). */
 private const val FULL_RATIO = 0.92f
 
+/**
+ * 이만큼 이상 끌어야 '방향이 있는 드래그'로 본다(웹 useDragSheet 의 FLICK_PX = 12).
+ * 이보다 짧으면 손떨림으로 보고 원래 자리로 돌린다.
+ */
+private val FLICK = 12.dp
+
 /** 놓았을 때 스냅 지점까지 미끄러지는 시간. 웹 `transition: height .24s ease` 와 같다. */
 private const val SNAP_MS = 240
 
 /**
  * 지도 위에 얹는 드래그 바텀시트. 웹 useDragSheet 를 옮긴 것이다.
  *
- * 스냅 지점은 셋이다:
+ * 높이는 셋이다:
  *  - collapsed : 핸들 바만 남고 지도만 보인다
- *  - mid       : 기본값. 시트 머리말(제목 블록)까지 보인다
+ *  - mid       : 처음 열었을 때의 상태. 시트 머리말(제목 블록)까지 보인다
  *  - full      : 화면을 거의 다 덮는다
+ *
+ * 놓으면 끈 **방향**의 끝까지 간다 — 위로 조금만 끌어도 full, 아래로 조금만 끌어도 collapsed.
+ * 예전에는 놓은 자리에서 가장 가까운 지점으로 붙여서, 끝까지 올리려면 화면 절반을 끌어야 했고
+ * 조금 끌다 놓으면 제자리로 튕겨 돌아왔다. 웹 useDragSheet 도 같은 규칙이다.
  *
  * mid 높이를 상수로 박지 않고 제목 블록을 실측해서 쓴다 — 글꼴 크기 설정이나 기기 폭에 따라
  * 제목 줄 높이가 달라져서, 상수로 두면 어떤 기기에서는 제목이 잘리고 어떤 기기에서는 아랫줄이 샌다.
@@ -73,6 +82,7 @@ private const val SNAP_MS = 240
 class DragSheetState(
     private val collapsedPx: Float,
     private val fallbackMidPx: Float,
+    private val flickPx: Float,
     private val scope: CoroutineScope,
 ) {
 
@@ -84,6 +94,9 @@ class DragSheetState(
 
     /** 스냅 애니메이션. 다음 손짓이 오면 즉시 끊는다. */
     private var snap: Job? = null
+
+    /** 지금 끌고 있는 손짓이 시작된 높이. 끌고 있지 않으면 NaN 이다. */
+    private var dragStartPx = Float.NaN
 
     val midPx: Float
         get() = if (headHeightPx > 0f) collapsedPx + headHeightPx else fallbackMidPx
@@ -103,16 +116,26 @@ class DragSheetState(
      */
     fun dragBy(deltaPx: Float) {
         snap?.cancel()
+        if (dragStartPx.isNaN()) dragStartPx = currentPx
         heightPx = (currentPx - deltaPx).coerceIn(collapsedPx, fullPx)
     }
 
-    /** 놓았을 때 가장 가까운 스냅 지점으로 미끄러진다. */
+    /** 놓았을 때 끈 방향의 끝으로 미끄러진다. 거의 안 움직였으면 시작한 자리로 돌아간다. */
     fun settle() {
-        moveTo(listOf(collapsedPx, midPx, fullPx).minByOrNull { abs(it - currentPx) } ?: midPx)
+        val start = if (dragStartPx.isNaN()) currentPx else dragStartPx
+        dragStartPx = Float.NaN
+        val moved = currentPx - start   // 위로 끌었으면 양수
+        moveTo(
+            when {
+                moved >= flickPx -> fullPx
+                moved <= -flickPx -> collapsedPx
+                else -> start
+            },
+        )
     }
 
-    /** 핸들을 톡 누르면 mid ↔ full 을 오간다. */
-    fun toggle() = moveTo(if (isFull) midPx else fullPx)
+    /** 핸들을 톡 누르면 끝과 끝을 오간다(다 올라가 있으면 내리고, 아니면 올린다). */
+    fun toggle() = moveTo(if (isFull) collapsedPx else fullPx)
 
     private fun moveTo(target: Float) {
         snap?.cancel()
@@ -130,8 +153,9 @@ fun rememberDragSheetState(): DragSheetState {
     val density = LocalDensity.current
     val collapsedPx = with(density) { SHEET_COLLAPSED.toPx() }
     val peekPx = with(density) { SHEET_PEEK.toPx() }
+    val flickPx = with(density) { FLICK.toPx() }
     val scope = rememberCoroutineScope()
-    return remember(collapsedPx, peekPx, scope) { DragSheetState(collapsedPx, peekPx, scope) }
+    return remember(collapsedPx, peekPx, flickPx, scope) { DragSheetState(collapsedPx, peekPx, flickPx, scope) }
 }
 
 /** 한 번의 드래그가 무엇을 하는지. 웹처럼 제스처가 시작될 때 정하고 끝날 때까지 바꾸지 않는다. */

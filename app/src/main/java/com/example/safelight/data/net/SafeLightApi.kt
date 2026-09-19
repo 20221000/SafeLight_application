@@ -37,14 +37,15 @@ interface SafeLightApi {
      *
      * 예전에는 매개변수 없이 전건을 받았다(서울 CSV 4만 건, 5.7MB). 백엔드가 서울 CSV 대신
      * 전국 공공데이터를 쓰게 되면서 25만 건이 되어 전체 조회가 없어졌다 —
-     * 범위를 안 보내면 400 이 온다. 위·경도 폭은 각각 0.5도까지만 받는다.
+     * 범위를 안 보내면 400 이 온다. 위·경도 폭은 각각 0.1도까지만 받는다.
+     * 매개변수 이름은 minLat/maxLat/minLng/maxLng 다(예전 minLatitude… 로 보내면 범위 없음으로 400).
      */
     @GET("cctvs")
     suspend fun getCctvs(
-        @Query("minLatitude") minLatitude: Double,
-        @Query("maxLatitude") maxLatitude: Double,
-        @Query("minLongitude") minLongitude: Double,
-        @Query("maxLongitude") maxLongitude: Double,
+        @Query("minLat") minLat: Double,
+        @Query("maxLat") maxLat: Double,
+        @Query("minLng") minLng: Double,
+        @Query("maxLng") maxLng: Double,
     ): ApiEnvelope<List<CctvDto>>
 
     /**
@@ -55,11 +56,23 @@ interface SafeLightApi {
      */
     @GET("security-lights")
     suspend fun getSecurityLights(
-        @Query("minLatitude") minLatitude: Double,
-        @Query("maxLatitude") maxLatitude: Double,
-        @Query("minLongitude") minLongitude: Double,
-        @Query("maxLongitude") maxLongitude: Double,
+        @Query("minLat") minLat: Double,
+        @Query("maxLat") maxLat: Double,
+        @Query("minLng") minLng: Double,
+        @Query("maxLng") maxLng: Double,
     ): ApiEnvelope<List<LocationDto>>
+
+    /**
+     * 지도에 보이는 범위의 치안시설(지구대·파출소 등). [getCctvs] 와 같은 범위 규칙이다
+     * (minLat… 필수, 폭 0.1도까지). 로그인 없이도 열려 있다.
+     */
+    @GET("police-facilities")
+    suspend fun getPoliceFacilities(
+        @Query("minLat") minLat: Double,
+        @Query("maxLat") maxLat: Double,
+        @Query("minLng") minLng: Double,
+        @Query("maxLng") maxLng: Double,
+    ): ApiEnvelope<List<PoliceFacilityDto>>
 
     /** 토큰이 없으면 빈 목록이 온다(웹도 토큰이 없으면 아예 요청하지 않는다). */
     @GET("danger-zones")
@@ -400,6 +413,18 @@ data class CctvDto(
     val purpose: String = "",
 )
 
+/** 치안시설 하나(백엔드 PoliceFacilityResponse). 지도에는 좌표만 쓰고 나머지는 참고용이다. */
+@Serializable
+data class PoliceFacilityDto(
+    val id: Long = 0,
+    val name: String = "",
+    val kind: String = "",
+    val address: String = "",
+    val tel: String = "",
+    val latitude: Double = 0.0,
+    val longitude: Double = 0.0,
+)
+
 /**
  * 위험구역 하나. 목록 API 는 아직 만료되지 않은 활성 구역만 내려준다.
  *
@@ -443,7 +468,7 @@ data class RouteRequest(
  * [safetyScore] 는 개수가 아니라 **가중 점수**다(백엔드 RouteService.calculateWeightedSafetyScore).
  *   CCTV×3 + 편의점×3 + 보안등×1 + 치안시설×4
  * 시설 5곳인 경로가 15로 나오므로 화면에는 '안전 점수 n점'이라고 적는다.
- * (치안시설은 아직 백엔드가 항상 0을 준다.)
+ * [policeFacilityLocations] 는 치안시설(지구대·파출소 등)이다.
  *
  * [securityLightLocations] 는 가로등(보안등)이다 — 2026-08-21 백엔드 PR #16 로 합계에 들어왔다.
  * 가로등을 주는 곳은 이 응답뿐이라(/cctvs 에 해당하는 전용 엔드포인트가 없다) 지도 화면이 아니라
@@ -458,6 +483,7 @@ data class RouteDto(
     val cctvLocations: List<LocationDto> = emptyList(),
     val storeLocations: List<LocationDto> = emptyList(),
     val securityLightLocations: List<LocationDto> = emptyList(),
+    val policeFacilityLocations: List<LocationDto> = emptyList(),
 )
 
 @Serializable

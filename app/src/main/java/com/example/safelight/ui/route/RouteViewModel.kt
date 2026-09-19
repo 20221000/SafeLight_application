@@ -12,6 +12,7 @@ import com.example.safelight.data.net.BookmarkRequest
 import com.example.safelight.data.net.CctvDto
 import com.example.safelight.data.net.LocationDto
 import com.example.safelight.data.net.Network
+import com.example.safelight.data.net.PoliceFacilityDto
 import com.example.safelight.data.net.RouteDto
 import com.example.safelight.data.net.RouteHistoryDto
 import com.example.safelight.data.net.RouteRequest
@@ -46,6 +47,7 @@ data class RankedRoute(val rank: Int, val route: RouteDto) {
     val cctvCount get() = route.cctvLocations.size
     val storeCount get() = route.storeLocations.size
     val lampCount get() = route.securityLightLocations.size
+    val policeCount get() = route.policeFacilityLocations.size
 }
 
 /**
@@ -140,6 +142,10 @@ class RouteViewModel : ViewModel() {
     var visibleStores by mutableStateOf<List<StorePlace>>(emptyList())
         private set
 
+    /** 배경 치안시설. CCTV 와 같은 확대부터 그린다. */
+    var visiblePolice by mutableStateOf<List<PoliceFacilityDto>>(emptyList())
+        private set
+
     private var lastBounds: MapBounds? = null
     private var lastZoom: Int = FACILITY_MIN_ZOOM
 
@@ -148,6 +154,7 @@ class RouteViewModel : ViewModel() {
     private var cctvJob: Job? = null
     private var lampJob: Job? = null
     private var storeJob: Job? = null
+    private var policeJob: Job? = null
 
     init {
         loadBookmarks()
@@ -166,6 +173,21 @@ class RouteViewModel : ViewModel() {
         refreshCctv(bounds, zoom)
         refreshLamps(bounds, zoom)
         refreshStores(bounds, zoom)
+        refreshPolice(bounds, zoom)
+    }
+
+    private fun refreshPolice(bounds: MapBounds, zoom: Int) {
+        if (zoom < FACILITY_MIN_ZOOM || bounds.isTooWide()) {
+            visiblePolice = emptyList()
+            return
+        }
+        policeJob?.cancel()
+        policeJob = viewModelScope.launch {
+            val list = runCatching { FacilityCache.police.load(bounds) }
+                .onFailure { Log.e(TAG, "치안시설 조회 실패", it) }
+                .getOrElse { return@launch }
+            visiblePolice = list.filter { bounds.contains(it.latitude, it.longitude) }
+        }
     }
 
     /**
