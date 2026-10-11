@@ -1,6 +1,10 @@
 package com.example.safelight.ui.nav
 
+import android.Manifest
+import android.os.Build
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.AlertDialog
@@ -15,6 +19,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.repeatOnLifecycle
@@ -26,6 +31,8 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import com.example.safelight.alert.AlertNotifier
+import com.example.safelight.alert.AlertWatchService
 import com.example.safelight.ui.admin.AdminRoot
 import com.example.safelight.ui.auth.AuthViewModel
 import com.example.safelight.ui.auth.MyInfoScreen
@@ -53,7 +60,7 @@ import kotlinx.coroutines.delay
  * 웹 MobileShell 의 자리 — 헤더 + 본문 + 하단 탭바.
  */
 @Composable
-fun SafeLightRoot(night: Boolean, onToggleNight: () -> Unit) {
+fun SafeLightRoot(openInboxSignal: Int, night: Boolean, onToggleNight: () -> Unit) {
     val navController = rememberNavController()
     // 탭을 오가도 지도가 보던 자리를 잃지 않도록, 화면보다 오래 사는 여기에 카메라를 둔다.
     val mapCamera = remember { MapCameraState() }
@@ -96,6 +103,28 @@ fun SafeLightRoot(night: Boolean, onToggleNight: () -> Unit) {
         }
     }
 
+    // 앱을 닫아도 친구의 긴급신고·쪽지가 휴대폰 알림으로 오게 한다. 로그인한 동안만 돈다.
+    // Android 13 부터는 알림 권한을 먼저 받아야 한다 — 거절하면 서비스도 띄우지 않는다.
+    val context = LocalContext.current
+    val notificationPermission = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission(),
+    ) { granted -> if (granted) AlertWatchService.start(context) }
+    LaunchedEffect(authVm.user) {
+        if (authVm.user == null) {
+            AlertWatchService.stop(context)
+            return@LaunchedEffect
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && !AlertNotifier.canPost(context)) {
+            notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+        } else {
+            AlertWatchService.start(context)
+        }
+    }
+    // 서비스가 새 알림을 띄웠으면 30초를 기다리지 않고 벨 뱃지를 바로 다시 센다.
+    LaunchedEffect(Unit) {
+        AlertWatchService.updates.collect { if (authVm.user != null) unreadVm.refresh() }
+    }
+
     fun goToTab(route: String) {
         if (currentRoute == route) return
         navController.navigate(route) {
@@ -117,6 +146,17 @@ fun SafeLightRoot(night: Boolean, onToggleNight: () -> Unit) {
         searchTarget = place
         // 웹은 장소를 고르면 지도 페이지로 이동한다. 다른 탭에서 검색했어도 결과를 지도에서 보여준다.
         goToMapTab()
+    }
+
+    // 상태바 알림을 누르고 들어오면 알림함을 연다. 관리자 콘솔이 열려 있었어도 닫고 연다.
+    LaunchedEffect(openInboxSignal) {
+        if (openInboxSignal == 0 || authVm.user == null) return@LaunchedEffect
+        adminOpen = false
+        if (currentRoute != "myinfo/notifications") navController.navigate("myinfo/notifications")
+    }
+    // 알림함에 들어오면 상태바에 남은 긴급·쪽지 알림은 다 본 것으로 걷는다.
+    LaunchedEffect(currentRoute) {
+        if (currentRoute == "myinfo/notifications") AlertNotifier.clearInbox(context)
     }
 
     // 콘솔이 열려 있으면 사용자 화면을 통째로 덮는다. 관리자가 아니게 되면(로그아웃 등) 저절로 닫힌다.

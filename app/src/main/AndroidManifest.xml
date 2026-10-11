@@ -14,6 +14,15 @@
     <uses-permission
         android:name="android.permission.WRITE_EXTERNAL_STORAGE"
         android:maxSdkVersion="28" />
+    <!--
+      친구의 긴급신고·쪽지를 휴대폰 알림으로 띄운다(alert/AlertWatchService).
+      백엔드에 푸시가 없어 앱이 직접 서버를 확인하므로, 앱을 닫아도 돌도록 포그라운드 서비스로 띄우고
+      재부팅 뒤에도 다시 켠다.
+    -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
     <application
         android:name=".SafeLightApp"
@@ -38,6 +47,24 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <service
+            android:name=".alert.AlertWatchService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="친구의 긴급신고 알림을 받기 위해 서버를 주기적으로 확인한다(서버 푸시 없음)." />
+        </service>
+
+        <receiver
+            android:name=".alert.BootReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
 
         <!--
           Android 10 아래에서 내려받은 첨부파일을 다른 앱으로 열어 줄 때 쓴다.
