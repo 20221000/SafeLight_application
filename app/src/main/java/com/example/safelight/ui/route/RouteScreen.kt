@@ -1,7 +1,6 @@
 package com.example.safelight.ui.route
 
 import android.Manifest
-import android.annotation.SuppressLint
 import android.content.Context
 import android.content.pm.PackageManager
 import android.util.Log
@@ -69,13 +68,13 @@ import com.example.safelight.ui.map.RouteColor
 import com.example.safelight.ui.map.currentBounds
 import com.example.safelight.ui.search.SearchedPlace
 import com.example.safelight.ui.theme.SafeLightTheme
-import com.google.android.gms.location.LocationServices
 import com.kakao.vectormap.KakaoMap
 import com.kakao.vectormap.LatLng
 import com.kakao.vectormap.camera.CameraUpdateFactory
 import com.example.safelight.ui.common.EmptyText
 import com.example.safelight.ui.common.MapControlButton
 import com.example.safelight.ui.common.MapControlSurface
+import com.example.safelight.ui.common.fetchMyLocation
 import com.example.safelight.ui.common.hasLocationPermission
 
 private const val TAG = "RouteScreen"
@@ -1129,14 +1128,9 @@ private fun OutlineButton(
     }
 }
 
-@SuppressLint("MissingPermission")   // 호출 전에 hasLocationPermission 으로 확인한다
 private fun requestCurrentLocation(context: Context, onLocation: (Double, Double) -> Unit) {
     if (!context.hasLocationPermission()) return
-    LocationServices.getFusedLocationProviderClient(context).lastLocation
-        .addOnSuccessListener { location ->
-            if (location != null) onLocation(location.latitude, location.longitude)
-        }
-        .addOnFailureListener { Log.w(TAG, "위치 조회 실패", it) }
+    context.fetchMyLocation(onLocation, onFailure = { Log.w(TAG, "위치 조회 실패", it) })
 }
 
 private fun Modifier.alphaIf(condition: Boolean, alpha: Float) =

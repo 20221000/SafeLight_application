@@ -18,8 +18,8 @@ import com.example.safelight.data.net.ReceivedMessageDto
 
 /**
  * 휴대폰 알림(상태바)을 띄우는 곳. 채널이 셋이다.
- *  - 긴급 알림: 친구의 긴급신고. 소리·진동과 함께 화면 위로 뜬다.
- *  - 쪽지: 친구가 보낸 쪽지. 보낸 사람마다 한 장으로 묶는다.
+ *  - 긴급 알림: 친구의 긴급신고. 소리·긴 진동과 함께 화면 위로 뜬다.
+ *  - 쪽지: 친구가 보낸 쪽지. 짧게 한 번 떤다. 보낸 사람마다 한 장으로 묶는다.
  *  - 알림 대기: [AlertWatchService] 가 떠 있다는 표시. 시스템이 요구하는 것이라 조용히 둔다.
  *
  * 어떤 친구의 신고가 오는지는 서버가 정한다 — 긴급 위치 공유를 허용한 친구에게만
@@ -27,9 +27,12 @@ import com.example.safelight.data.net.ReceivedMessageDto
  */
 object AlertNotifier {
 
-    const val CHANNEL_EMERGENCY = "emergency"
-    const val CHANNEL_MESSAGE = "message"
+    // 채널의 소리·진동은 한 번 만들면 앱이 바꿀 수 없다(사용자만 설정에서 바꾼다).
+    // 진동 패턴을 넣으면서 이름을 _v2 로 바꿨다 — 이미 설치된 폰에서도 새 진동이 적용되게.
+    const val CHANNEL_EMERGENCY = "emergency_v2"
+    const val CHANNEL_MESSAGE = "message_v2"
     const val CHANNEL_WATCH = "watch"
+    private val OLD_CHANNELS = listOf("emergency", "message")
 
     /** 알림을 누르면 [MainActivity] 가 이 값을 보고 알림함을 연다. */
     const val EXTRA_OPEN = "open"
@@ -45,14 +48,18 @@ object AlertNotifier {
     fun createChannels(context: Context) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
         val manager = context.getSystemService(NotificationManager::class.java)
+        OLD_CHANNELS.forEach { manager.deleteNotificationChannel(it) }
         manager.createNotificationChannels(
             listOf(
                 NotificationChannel(CHANNEL_EMERGENCY, "친구 긴급신고", NotificationManager.IMPORTANCE_HIGH).apply {
                     description = "위치 공유를 허용한 친구가 긴급신고를 하면 알려줍니다."
                     enableVibration(true)
+                    vibrationPattern = Haptics.timings(Haptics.FRIEND_EMERGENCY)
                 },
                 NotificationChannel(CHANNEL_MESSAGE, "쪽지", NotificationManager.IMPORTANCE_HIGH).apply {
                     description = "친구가 쪽지를 보내면 알려줍니다."
+                    enableVibration(true)
+                    vibrationPattern = Haptics.timings(Haptics.MESSAGE)
                 },
                 NotificationChannel(CHANNEL_WATCH, "알림 대기", NotificationManager.IMPORTANCE_MIN).apply {
                     description = "앱을 닫아도 긴급신고·쪽지를 받기 위해 떠 있는 표시입니다."
@@ -101,7 +108,9 @@ object AlertNotifier {
             .setStyle(NotificationCompat.BigTextStyle().bigText(text))
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setCategory(NotificationCompat.CATEGORY_ALARM)
-            .setDefaults(NotificationCompat.DEFAULT_ALL)
+            // 소리·불빛은 기본값, 진동만 우리 패턴. Android 8 아래는 채널이 없어 여기 값을 쓴다.
+            .setDefaults(NotificationCompat.DEFAULT_SOUND or NotificationCompat.DEFAULT_LIGHTS)
+            .setVibrate(Haptics.timings(Haptics.FRIEND_EMERGENCY))
             .setAutoCancel(true)
             .setContentIntent(openInboxIntent(context, item.notificationId.toInt()))
             .build()
@@ -122,6 +131,7 @@ object AlertNotifier {
             .setStyle(NotificationCompat.BigTextStyle().bigText(latest.content))
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setCategory(NotificationCompat.CATEGORY_MESSAGE)
+            .setVibrate(Haptics.timings(Haptics.MESSAGE))
             .setAutoCancel(true)
             .setContentIntent(openInboxIntent(context, sender.toInt()))
             .build()

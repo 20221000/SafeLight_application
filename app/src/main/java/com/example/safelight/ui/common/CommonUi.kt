@@ -1,6 +1,7 @@
 package com.example.safelight.ui.common
 
 import android.Manifest
+import android.annotation.SuppressLint
 import android.content.Context
 import android.content.pm.PackageManager
 import androidx.compose.foundation.background
@@ -22,6 +23,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import com.example.safelight.ui.theme.SafeLightTheme
+import com.google.android.gms.location.LocationServices
+import com.google.android.gms.location.Priority
+import com.google.android.gms.tasks.CancellationTokenSource
 
 /**
  * 화면 여럿이 똑같이 갖고 있던 조각들을 한곳에 모았다.
@@ -79,3 +83,24 @@ fun MapControlButton(onClick: () -> Unit, content: @Composable () -> Unit) {
 fun Context.hasLocationPermission(): Boolean =
     ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) ==
         PackageManager.PERMISSION_GRANTED
+
+/**
+ * 지도·경로 화면의 '내 위치'. 빨리 뜨도록 휴대폰에 남아 있는 마지막 위치를 먼저 쓰고,
+ * 그게 없으면(재부팅 직후, GPS 를 처음 쓰는 폰) 새로 받는다 — 없다고 그냥 끝내면 버튼이 먹통이 된다.
+ * 긴급신고는 오래된 좌표가 실리면 안 되므로 이걸 쓰지 않고 항상 새로 받는다(SosViewModel).
+ */
+@SuppressLint("MissingPermission")   // 부르기 전에 hasLocationPermission 으로 확인한다
+fun Context.fetchMyLocation(onLocation: (Double, Double) -> Unit, onFailure: (Exception) -> Unit) {
+    val client = LocationServices.getFusedLocationProviderClient(this)
+    client.lastLocation
+        .addOnSuccessListener { last ->
+            if (last != null) {
+                onLocation(last.latitude, last.longitude)
+                return@addOnSuccessListener
+            }
+            client.getCurrentLocation(Priority.PRIORITY_HIGH_ACCURACY, CancellationTokenSource().token)
+                .addOnSuccessListener { now -> if (now != null) onLocation(now.latitude, now.longitude) }
+                .addOnFailureListener(onFailure)
+        }
+        .addOnFailureListener(onFailure)
+}

@@ -20,6 +20,17 @@ fun secret(key: String): String = localProps.getProperty(key) ?: ""
 //   실기기 USB : http://localhost:8080/  + `adb reverse tcp:8080 tcp:8080`
 val apiBaseUrl: String = localProps.getProperty("API_BASE_URL") ?: "http://10.0.2.2:8080/"
 
+// 배포용(release) 빌드는 사람마다 다를 일이 없다 — 팀원이 배포한 운영 서버로 고정한다.
+// 위의 API_BASE_URL(개발용 localhost 등)이 배포 APK 에 섞여 들어가지 않게 따로 둔다.
+val releaseApiBaseUrl = "https://api.safelight26.com/"
+
+// 배포 APK 서명 키. 키스토어 파일과 비밀번호는 공개 저장소에 올리면 안 되므로 local.properties 에서 읽는다.
+// 네 값이 다 있을 때만 서명 설정을 만든다(없으면 Android Studio 의 Generate Signed APK 로 직접 서명).
+val releaseStoreFile: String? = localProps.getProperty("RELEASE_STORE_FILE")
+val hasReleaseSigning = listOf(
+    "RELEASE_STORE_FILE", "RELEASE_STORE_PASSWORD", "RELEASE_KEY_ALIAS", "RELEASE_KEY_PASSWORD",
+).all { !localProps.getProperty(it).isNullOrBlank() }
+
 android {
     namespace = "com.example.safelight"
     compileSdk {
@@ -39,12 +50,24 @@ android {
         buildConfigField("String", "KAKAO_REST_API_KEY", "\"${secret("KAKAO_REST_API_KEY")}\"")
     }
 
+    signingConfigs {
+        if (hasReleaseSigning) {
+            create("release") {
+                storeFile = rootProject.file(releaseStoreFile!!)
+                storePassword = secret("RELEASE_STORE_PASSWORD")
+                keyAlias = secret("RELEASE_KEY_ALIAS")
+                keyPassword = secret("RELEASE_KEY_PASSWORD")
+            }
+        }
+    }
+
     buildTypes {
         debug {
             buildConfigField("String", "API_BASE_URL", "\"$apiBaseUrl\"")
         }
         release {
-            buildConfigField("String", "API_BASE_URL", "\"$apiBaseUrl\"")
+            buildConfigField("String", "API_BASE_URL", "\"$releaseApiBaseUrl\"")
+            if (hasReleaseSigning) signingConfig = signingConfigs.getByName("release")
             optimization {
                 enable = false
             }

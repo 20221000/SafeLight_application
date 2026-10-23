@@ -1,7 +1,6 @@
 package com.example.safelight.ui.map
 
 import android.Manifest
-import android.annotation.SuppressLint
 import android.content.pm.PackageManager
 import android.util.Log
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -55,12 +54,12 @@ import com.example.safelight.ui.sos.SosButton
 import com.example.safelight.ui.route.ActiveRoute
 import com.example.safelight.ui.search.SearchedPlace
 import com.example.safelight.ui.theme.SafeLightTheme
-import com.google.android.gms.location.LocationServices
 import com.kakao.vectormap.KakaoMap
 import com.kakao.vectormap.LatLng
 import com.kakao.vectormap.camera.CameraUpdateFactory
 import com.example.safelight.ui.common.MapControlButton
 import com.example.safelight.ui.common.MapControlSurface
+import com.example.safelight.ui.common.fetchMyLocation
 import com.example.safelight.ui.common.hasLocationPermission
 
 private const val TAG = "MapScreen"
@@ -546,7 +545,6 @@ private fun LayerChip(
  * 내 위치 표시. [recenter] 면 그 자리로 지도를 옮긴다 —
  * 사용자가 이미 다른 곳을 보고 있을 때 화면을 뺏지 않기 위해 마커만 찍는 경우와 나눈다.
  */
-@SuppressLint("MissingPermission")   // 호출 전에 hasLocationPermission 으로 확인한다
 private fun moveToMyLocation(
     context: android.content.Context,
     map: KakaoMap?,
@@ -555,15 +553,15 @@ private fun moveToMyLocation(
     onLocation: (Double, Double) -> Unit = { _, _ -> },
 ) {
     if (map == null || !context.hasLocationPermission()) return
-    LocationServices.getFusedLocationProviderClient(context).lastLocation
-        .addOnSuccessListener { location ->
-            if (location == null) return@addOnSuccessListener
-            val here = LatLng.from(location.latitude, location.longitude)
+    context.fetchMyLocation(
+        onLocation = { lat, lng ->
+            val here = LatLng.from(lat, lng)
             layers?.drawMyLocation(here)
             if (recenter) map.moveCamera(CameraUpdateFactory.newCenterPosition(here, FACILITY_MIN_ZOOM))
-            onLocation(location.latitude, location.longitude)
-        }
-        .addOnFailureListener { Log.w(TAG, "위치 조회 실패", it) }
+            onLocation(lat, lng)
+        },
+        onFailure = { Log.w(TAG, "위치 조회 실패", it) },
+    )
 }
 
 @Composable

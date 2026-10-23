@@ -20,6 +20,8 @@
       재부팅 뒤에도 다시 켠다.
     -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- 긴급신고가 접수됐을 때, 친구 알림이 왔을 때 진동(alert/Haptics). 설치 때 자동 허용되는 권한이다. -->
+    <uses-permission android:name="android.permission.VIBRATE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />

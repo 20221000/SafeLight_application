@@ -11,5 +11,9 @@
 /local.properties
 local.properties
 
+# 배포 APK 서명 키. 잃어버리거나 새면 같은 앱으로 업데이트할 수 없다.
+*.jks
+*.keystore
+
 # IDE 개인 설정 — 연결된 기기, 실행 구성, 로컬 경로 등 사람마다 다르다.
 .idea/

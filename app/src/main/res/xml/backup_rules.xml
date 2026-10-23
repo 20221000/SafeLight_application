@@ -1,13 +1,9 @@
-<?xml version="1.0" encoding="utf-8"?><!--
-   Sample backup rules file; uncomment and customize as necessary.
-   See https://developer.android.com/guide/topics/data/autobackup
-   for details.
-   Note: This file is ignored for devices older than API 31
-   See https://developer.android.com/about/versions/12/backup-restore
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Android 11(API 30) 이하의 백업 규칙. 12 이상은 data_extraction_rules.xml 을 쓴다.
+  로그인 토큰과 로그인 사용자는 백업하지 않는다(이유는 그 파일 주석 참고).
 -->
 <full-backup-content>
-    <!--
-   <include domain="sharedpref" path="."/>
-   <exclude domain="sharedpref" path="device.xml"/>
--->
+    <exclude domain="sharedpref" path="safelight_auth.xml" />
+    <exclude domain="sharedpref" path="safelight_session.xml" />
 </full-backup-content>

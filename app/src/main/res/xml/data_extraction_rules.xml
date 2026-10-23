@@ -1,19 +1,17 @@
-<?xml version="1.0" encoding="utf-8"?><!--
-   Sample data extraction rules file; uncomment and customize as necessary.
-   See https://developer.android.com/about/versions/12/backup-restore#xml-changes
-   for details.
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Android 12(API 31) 이상의 백업·기기 이전 규칙.
+  로그인 토큰(safelight_auth)과 로그인 사용자(safelight_session)는 빼고 옮긴다 —
+  토큰이 구글 백업에 남거나 새 폰으로 그대로 넘어가면 로그인 없이 계정이 열린다.
+  야간 모드 같은 설정은 그대로 옮긴다.
 -->
 <data-extraction-rules>
     <cloud-backup>
-        <!-- TODO: Use <include> and <exclude> to control what is backed up.
-        <include .../>
-        <exclude .../>
-        -->
+        <exclude domain="sharedpref" path="safelight_auth.xml" />
+        <exclude domain="sharedpref" path="safelight_session.xml" />
     </cloud-backup>
-    <!--
     <device-transfer>
-        <include .../>
-        <exclude .../>
+        <exclude domain="sharedpref" path="safelight_auth.xml" />
+        <exclude domain="sharedpref" path="safelight_session.xml" />
     </device-transfer>
-    -->
 </data-extraction-rules>

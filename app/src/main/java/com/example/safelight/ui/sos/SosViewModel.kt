@@ -7,6 +7,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.safelight.alert.Haptics
 import com.example.safelight.data.net.EmergencyReportCreateRequest
 import com.example.safelight.data.net.Network
 import com.example.safelight.data.net.SafeLightApi
@@ -148,6 +149,8 @@ class SosViewModel : ViewModel() {
 
             reportId = response.body()?.data?.reportId
             phase = SosPhase.Done
+            // 급한 상황이라 화면을 안 보고 있을 수 있다. 접수됐다는 걸 손으로도 알게 한다.
+            Haptics.vibrate(context, Haptics.SOS_ACCEPTED)
         }
     }
 
