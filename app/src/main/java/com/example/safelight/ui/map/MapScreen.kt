@@ -58,6 +58,7 @@ import com.kakao.vectormap.camera.CameraUpdateFactory
 import com.example.safelight.ui.common.MapControlButton
 import com.example.safelight.ui.common.MapControlSurface
 import com.example.safelight.ui.common.LOCATION_PERMISSIONS
+import com.example.safelight.ui.common.TRACK_INTERVAL_MS
 import com.example.safelight.ui.common.checkLocationSettings
 import com.example.safelight.ui.common.hasLocationPermission
 import com.example.safelight.ui.common.isLocationEnabled
@@ -77,8 +78,11 @@ private val TOP = 16.dp
 /** 경로 전체를 화면에 담을 때의 여백(웹 setBounds 의 32/24). */
 private const val ROUTE_FIT_PADDING_DP = 32
 
-/** 따라가기 중 카메라가 새 위치로 미끄러지는 시간. 위치는 2초마다 오므로 그보다 짧아야 밀리지 않는다. */
-private const val FOLLOW_ANIMATION_MS = 400
+/**
+ * 내 위치 점과 따라가는 카메라가 새 위치로 미끄러지는 시간. 위치가 오는 간격([TRACK_INTERVAL_MS])과
+ * 같게 둔다 — 짧으면 움직였다 멈췄다를 반복하고(예전 400ms), 길면 실제 위치보다 늦게 따라온다.
+ */
+private val FOLLOW_ANIMATION_MS = TRACK_INTERVAL_MS.toInt()
 
 /**
  * 웹 MapView.jsx 의 자리. 지도 + 좌상단 레이어 칩 + 안내 문구 + 우하단 줌·현재위치 버튼.
@@ -175,7 +179,8 @@ fun MapScreen(
         val (latitude, longitude) = myLocation ?: return@LaunchedEffect
         val map = mapHolder[0] ?: return@LaunchedEffect
         val here = LatLng.from(latitude, longitude)
-        layersHolder[0]?.drawMyLocation(here)
+        // 점과 카메라를 같은 시간 동안 함께 옮긴다. 다음 위치가 올 즈음 이동이 끝나서 걷는 대로 이어져 보인다.
+        layersHolder[0]?.drawMyLocation(here, glideMs = FOLLOW_ANIMATION_MS)
         vm.onLocationKnown(latitude, longitude)
         if (!follow) return@LaunchedEffect
         if (!centeredOnce[0]) {

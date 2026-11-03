@@ -185,11 +185,14 @@ object RecentLocation {
     }
 }
 
-/** 걸을 때 위치를 받는 간격. 2초면 지도 위 점이 끊겨 보이지 않으면서 배터리를 크게 쓰지 않는다. */
-private const val TRACK_INTERVAL_MS = 2_000L
+/**
+ * 걸을 때 위치를 받는 간격. 지도 화면은 점을 이 시간 동안 미끄러지듯 옮겨서 끊김 없이 이어 보이게 한다.
+ * 예전 2초는 걸을 때 점이 뚝뚝 끊겨 보였다. 지도 화면이 떠 있는 동안만 받으므로 배터리 부담은 크지 않다.
+ */
+const val TRACK_INTERVAL_MS = 1_000L
 
 /** 이보다 덜 움직였으면 새 위치로 치지 않는다 — 제자리에서 GPS 오차로 점이 떨리는 걸 막는다. */
-private const val TRACK_MIN_DISTANCE_M = 3f
+private const val TRACK_MIN_DISTANCE_M = 2f
 
 /**
  * 내 위치를 계속 받는다(웹 useMyLocation 자리). 걸어가면 돌려주는 값이 따라 바뀐다.

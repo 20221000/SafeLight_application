@@ -10,6 +10,7 @@ import com.example.safelight.data.net.PoliceFacilityDto
 import com.kakao.vectormap.KakaoMap
 import com.kakao.vectormap.LatLng
 import com.kakao.vectormap.label.CompetitionType
+import com.kakao.vectormap.label.Label
 import com.kakao.vectormap.label.LabelLayer
 import com.kakao.vectormap.label.LabelLayerOptions
 import com.kakao.vectormap.label.LabelOptions
@@ -307,12 +308,24 @@ class MapLayers(
         layer.putAll(listOf(LabelOptions.from(position).setStyles(style)))
     }
 
-    fun drawMyLocation(position: LatLng?) {
+    /**
+     * 내 위치 점. 점은 하나를 만들어 두고 옮긴다 — 예전에는 위치가 올 때마다 지웠다 새로 만들어서
+     * 걸을 때 점이 2초마다 순간이동했다. [glideMs] 가 있으면 그 시간 동안 미끄러지듯 옮긴다.
+     */
+    fun drawMyLocation(position: LatLng?, glideMs: Int = 0) {
         val layer = myLocationLabels ?: return
+        if (position == null) {
+            layer.removeAll()
+            myLocationLabel = null
+            return
+        }
+        myLocationLabel?.let { label ->
+            if (glideMs > 0) label.moveTo(position, glideMs) else label.moveTo(position)
+            return
+        }
         val style = myLocationStyle ?: return
-        layer.putAll(
-            if (position == null) emptyList()
-            else listOf(LabelOptions.from(position).setStyles(style)),
-        )
+        myLocationLabel = layer.addLabel(LabelOptions.from(position).setStyles(style))
     }
+
+    private var myLocationLabel: Label? = null
 }
