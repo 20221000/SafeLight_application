@@ -125,31 +125,54 @@ class MapLayers(
         if (options.isNotEmpty()) addLabels(options)
     }
 
+    /** 시설 레이어마다 지금 그려 둔 점(좌표 → 라벨). [putDots] 가 바뀐 것만 지우고 더하는 데 쓴다. */
+    private val drawnDots = HashMap<LabelLayer, MutableMap<String, Label>>()
+
+    /**
+     * 시설 점(CCTV·가로등·치안시설·편의점)을 그린다. [putAll] 처럼 전부 지우고 다시 그리면
+     * 내 위치 따라가기 중(지도가 1초마다 움직인다) 점들이 계속 깜빡여서, 화면에서 빠진 점만 지우고
+     * 새로 들어온 점만 더한다(웹 facilityLayer.js 와 같은 방식).
+     */
+    private fun LabelLayer.putDots(points: List<Pair<Double, Double>>, style: LabelStyles) {
+        val drawn = drawnDots.getOrPut(this) { HashMap() }
+        val keep = HashSet<String>(points.size)
+        val addKeys = ArrayList<String>()
+        val addOptions = ArrayList<LabelOptions>()
+        points.forEach { (lat, lng) ->
+            val key = "$lat,$lng"
+            if (keep.add(key) && key !in drawn) {
+                addKeys += key
+                addOptions += LabelOptions.from(LatLng.from(lat, lng)).setStyles(style)
+            }
+        }
+        val gone = drawn.keys.filter { it !in keep }
+        if (gone.isNotEmpty()) {
+            remove(*gone.mapNotNull { drawn.remove(it) }.toTypedArray())
+        }
+        if (addOptions.isNotEmpty()) {
+            addLabels(addOptions).forEachIndexed { i, label -> if (label != null) drawn[addKeys[i]] = label }
+        }
+    }
+
     /**
      * [small] 은 경로 안내 화면용이다 — 웹 RoutePage 는 배경 CCTV 를 지도 화면(11px)보다
      * 작은 9px 로 그린다. 경로 위 안전시설 점보다 크면 그쪽으로 가야 할 시선을 뺏기 때문이다.
      */
     fun drawCctv(items: List<CctvDto>, small: Boolean = false) {
         val style = (if (small) routeCctvDotStyle else cctvDotStyle) ?: return
-        cctvLabels?.putAll(
-            items.map { LabelOptions.from(LatLng.from(it.latitude, it.longitude)).setStyles(style) },
-        )
+        cctvLabels?.putDots(items.map { it.latitude to it.longitude }, style)
     }
 
     /** 가로등 점. CCTV 와 같은 크기(11dp)를 쓰고, [small] 이면 경로 화면용 9dp 다. */
     fun drawLamps(items: List<LocationDto>, small: Boolean = false) {
         val style = (if (small) routeLampDotStyle else lampDotStyle) ?: return
-        lampLabels?.putAll(
-            items.map { LabelOptions.from(LatLng.from(it.latitude, it.longitude)).setStyles(style) },
-        )
+        lampLabels?.putDots(items.map { it.latitude to it.longitude }, style)
     }
 
     /** 치안시설 점(짙은 남색). [small] 이면 경로 화면용 9dp 다. */
     fun drawPolice(items: List<PoliceFacilityDto>, small: Boolean = false) {
         val style = (if (small) routePoliceDotStyle else policeDotStyle) ?: return
-        policeLabels?.putAll(
-            items.map { LabelOptions.from(LatLng.from(it.latitude, it.longitude)).setStyles(style) },
-        )
+        policeLabels?.putDots(items.map { it.latitude to it.longitude }, style)
     }
 
     /**
@@ -163,9 +186,7 @@ class MapLayers(
     fun drawStores(items: List<StorePlace>, small: Boolean = false) {
         val layer = storeLabels ?: return
         val style = (if (small) routeStoreDotStyle else storeDotStyle) ?: return
-        layer.putAll(
-            items.map { LabelOptions.from(LatLng.from(it.latitude, it.longitude)).setStyles(style) },
-        )
+        layer.putDots(items.map { it.latitude to it.longitude }, style)
     }
 
     /**
