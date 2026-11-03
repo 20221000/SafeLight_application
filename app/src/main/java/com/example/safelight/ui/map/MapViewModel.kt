@@ -335,21 +335,46 @@ class MapViewModel : ViewModel() {
             storeNotice = "지도를 확대하면 주변 편의점이 표시됩니다"
             return
         }
+        // 예전에는 지도가 멈출 때마다 카카오에 다시 검색했다. 내 위치 따라가기가 생기면서 걷는 동안
+        // 2초마다 지도가 움직이게 됐고, 그때마다 검색(최대 48건)이 나가 카카오 하루 사용량을 깎았다.
+        // 이제 화면보다 넓게 검색해 두고 그 안에서 움직이면 다시 검색하지 않는다(CCTV·가로등의
+        // FacilityCache 와 같은 방식). 45곳 한도에 잘린 결과는 확대하면 더 정확해지므로 확대가 바뀌면 다시 찾는다.
+        storeCache?.let { cached ->
+            if (cached.bounds.contains(bounds) && (!cached.result.capped || cached.zoom == zoom)) {
+                showStores(cached.result, bounds)
+                return
+            }
+        }
         storeJob = viewModelScope.launch {
-            val result = collectStores(bounds)
+            val target = bounds.padded()
+            val result = collectStores(target)
             if (result.failed) {
                 visibleStores = emptyList()
                 storeNotice = "편의점 정보를 불러오지 못했습니다"
                 return@launch
             }
-            visibleStores = result.places
-            // 끝까지 쪼개고도 넘쳤다면 그 사실을 숨기지 않는다 — 실제로는 더 있다.
-            storeNotice = when {
-                result.places.isEmpty() -> "이 지역에는 편의점이 없습니다"
-                result.capped -> "편의점 ${result.places.size}곳 이상 · 확대하면 더 정확합니다"
-                else -> "편의점 ${result.places.size}곳"
-            }
+            storeCache = StoreCache(target, zoom, result)
+            showStores(result, bounds)
         }
     }
+
+    /**
+     * 받아 둔 편의점을 그린다. 같은 목록을 다시 넣으면 상태가 바뀌지 않아 지도도 다시 그리지 않는다
+     * (지웠다 다시 그리면 걷는 동안 점이 깜빡인다). '몇 곳'은 넓게 받은 전체가 아니라 화면 안의 수다.
+     */
+    private fun showStores(result: StoreResult, bounds: MapBounds) {
+        visibleStores = result.places
+        val inView = result.places.count { bounds.contains(it.latitude, it.longitude) }
+        // 끝까지 쪼개고도 넘쳤다면 그 사실을 숨기지 않는다 — 실제로는 더 있다.
+        storeNotice = when {
+            inView == 0 -> "이 지역에는 편의점이 없습니다"
+            result.capped -> "편의점 ${inView}곳 이상 · 확대하면 더 정확합니다"
+            else -> "편의점 ${inView}곳"
+        }
+    }
+
+    /** 화면보다 넓게 검색해 둔 편의점. [zoom] 은 검색할 때의 확대 단계다. */
+    private class StoreCache(val bounds: MapBounds, val zoom: Int, val result: StoreResult)
+    private var storeCache: StoreCache? = null
 
 }

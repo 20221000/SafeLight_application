@@ -1,8 +1,6 @@
 package com.example.safelight.ui.map
 
-import android.Manifest
 import android.content.pm.PackageManager
-import android.util.Log
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -59,10 +57,16 @@ import com.kakao.vectormap.LatLng
 import com.kakao.vectormap.camera.CameraUpdateFactory
 import com.example.safelight.ui.common.MapControlButton
 import com.example.safelight.ui.common.MapControlSurface
-import com.example.safelight.ui.common.fetchMyLocation
+import com.example.safelight.ui.common.LOCATION_PERMISSIONS
+import com.example.safelight.ui.common.checkLocationSettings
 import com.example.safelight.ui.common.hasLocationPermission
-
-private const val TAG = "MapScreen"
+import com.example.safelight.ui.common.isLocationEnabled
+import com.example.safelight.ui.common.rememberMyLocation
+import androidx.activity.result.IntentSenderRequest
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import com.kakao.vectormap.camera.CameraAnimation
 
 // 웹 MapView.jsx 의 모바일 치수(useIsMobile 분기의 값)를 그대로 옮겼다.
 private val CHIP_HEIGHT = 26.dp
@@ -72,6 +76,9 @@ private val TOP = 16.dp
 
 /** 경로 전체를 화면에 담을 때의 여백(웹 setBounds 의 32/24). */
 private const val ROUTE_FIT_PADDING_DP = 32
+
+/** 따라가기 중 카메라가 새 위치로 미끄러지는 시간. 위치는 2초마다 오므로 그보다 짧아야 밀리지 않는다. */
+private const val FOLLOW_ANIMATION_MS = 400
 
 /**
  * 웹 MapView.jsx 의 자리. 지도 + 좌상단 레이어 칩 + 안내 문구 + 우하단 줌·현재위치 버튼.
@@ -110,14 +117,72 @@ fun MapScreen(
     }
 
     // 위치 권한. 웹은 브라우저가 물어보지만 안드로이드는 앱이 직접 띄워야 한다.
+    // 권한을 받는 순간 아래 rememberMyLocation 이 위치를 받기 시작한다.
+    // 정밀·대략 위치를 함께 묻고, 둘 중 하나라도 허용이면 쓴다(LOCATION_PERMISSIONS 주석 참고).
+    var hasLocationPermission by remember { mutableStateOf(context.hasLocationPermission()) }
     val locationPermission = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestPermission(),
-    ) { granted ->
-        if (granted) {
-            moveToMyLocation(
-                context, mapHolder[0], layersHolder[0],
-                recenter = true, onLocation = vm::onLocationKnown,
-            )
+        ActivityResultContracts.RequestMultiplePermissions(),
+    ) { result -> hasLocationPermission = result.values.any { it } }
+
+    // 휴대폰 위치(GPS)가 꺼져 있으면 권한이 있어도 위치가 오지 않는다. 예전에는 점이 그냥 안 나왔다.
+    // 권한을 받으면 한 번 시스템의 '위치 사용' 창을 띄우고, 거절하면 안내 줄로 알린다.
+    var locationOn by remember { mutableStateOf(context.isLocationEnabled()) }
+    val locationSettings = rememberLauncherForActivityResult(
+        ActivityResultContracts.StartIntentSenderForResult(),
+    ) { locationOn = context.isLocationEnabled() }
+    LaunchedEffect(hasLocationPermission) {
+        if (!hasLocationPermission) return@LaunchedEffect
+        context.checkLocationSettings { needed ->
+            locationSettings.launch(IntentSenderRequest.Builder(needed.resolution).build())
+        }
+    }
+    // 설정 앱에서 위치나 권한을 바꾸고 돌아올 수 있다 — 화면에 돌아올 때마다 다시 확인한다.
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                locationOn = context.isLocationEnabled()
+                hasLocationPermission = context.hasLocationPermission()
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+
+    // 내 위치는 계속 받는다. 따라가기(follow)가 켜져 있으면 지도가 나를 따라오고,
+    // 지도를 손으로 끌면 꺼진다. '현재 위치' 버튼이 다시 켠다(웹과 같은 방식).
+    val myLocation = rememberMyLocation(enabled = hasLocationPermission)
+    // 처음부터 따라가는 건 아무것도 안 보던 상태로 들어왔을 때뿐이다.
+    // 탭을 떠났다 오면(저장된 카메라) 보던 자리를, 검색·경로로 들어오면 그쪽을 먼저 보여준다.
+    var follow by remember {
+        mutableStateOf(
+            camera.latitude == INITIAL_LATITUDE && camera.longitude == INITIAL_LONGITUDE &&
+                activeRoute == null && searchTarget == null,
+        )
+    }
+    // 위치를 못 받는 이유를 레이어 안내 줄 맨 위에 띄운다(웹과 같은 문구).
+    val locationNotice = when {
+        !hasLocationPermission -> "위치 권한이 꺼져 있어 내 위치를 표시할 수 없습니다"
+        !locationOn -> "내 위치를 확인할 수 없습니다 · 휴대폰 위치(GPS)를 켜 주세요"
+        myLocation == null -> "내 위치를 찾는 중입니다…"
+        else -> ""
+    }
+    // 버튼은 실제로 따라가고 있을 때만 채운다 — 위치가 없는데 '따라가는 중'으로 보이면 헷갈린다.
+    val following = follow && myLocation != null && hasLocationPermission && locationOn
+    // 첫 위치에서만 확대 단계를 시설이 보이는 높이로 맞춘다. 그 뒤로는 사용자가 정한 확대를 지킨다.
+    val centeredOnce = remember { booleanArrayOf(false) }
+    LaunchedEffect(myLocation, mapReady, follow) {
+        val (latitude, longitude) = myLocation ?: return@LaunchedEffect
+        val map = mapHolder[0] ?: return@LaunchedEffect
+        val here = LatLng.from(latitude, longitude)
+        layersHolder[0]?.drawMyLocation(here)
+        vm.onLocationKnown(latitude, longitude)
+        if (!follow) return@LaunchedEffect
+        if (!centeredOnce[0]) {
+            map.moveCamera(CameraUpdateFactory.newCenterPosition(here, FACILITY_MIN_ZOOM))
+            centeredOnce[0] = true
+        } else {
+            map.moveCamera(CameraUpdateFactory.newCenterPosition(here), CameraAnimation.from(FOLLOW_ANIMATION_MS))
         }
     }
 
@@ -149,6 +214,7 @@ fun MapScreen(
     LaunchedEffect(searchTarget, mapReady) {
         val place = searchTarget ?: return@LaunchedEffect
         val map = mapHolder[0] ?: return@LaunchedEffect
+        follow = false   // 검색한 곳을 보는 중이다 — 내 위치로 끌고 가지 않는다.
         val position = LatLng.from(place.latitude, place.longitude)
         map.moveCamera(CameraUpdateFactory.newCenterPosition(position, SEARCH_ZOOM))
         layersHolder[0]?.drawSearchPin(position, place.name)
@@ -171,6 +237,8 @@ fun MapScreen(
             startTextColor = RouteColor.activeStartText,
             destinationColor = RouteColor.activeDestination,
         )
+        // 경로 전체를 화면에 맞춘다. 따라가기가 켜져 있으면 다음 위치에 바로 내 위치로 끌려간다.
+        follow = false
         mapHolder[0]?.fitToRoute(route, (ROUTE_FIT_PADDING_DP * density).toInt())
     }
 
@@ -183,24 +251,13 @@ fun MapScreen(
             initialPosition = LatLng.from(camera.latitude, camera.longitude),
             initialZoom = camera.zoom,
             onCameraIdle = { map -> map.currentBounds()?.let { vm.onCameraIdle(it, map.zoomLevel) } },
+            onUserDrag = { follow = false },
             onReady = { kakaoMap, layers ->
                 mapHolder[0] = kakaoMap
                 layersHolder[0] = layers
                 mapReady = true
-                if (context.hasLocationPermission()) {
-                    // 위치 조회는 느리게 끝난다. 그동안 사용자가 보던 화면을 덮어쓰지 않도록
-                    // 저장된 카메라가 초기값 그대로일 때만 내 위치로 옮긴다.
-                    // 안내 중이면 경로를 화면에 맞추는 쪽이 먼저라 아예 옮기지 않는다.
-                    val untouched = camera.latitude == INITIAL_LATITUDE &&
-                        camera.longitude == INITIAL_LONGITUDE
-                    moveToMyLocation(
-                        context, kakaoMap, layers,
-                        recenter = untouched && activeRoute == null,
-                        onLocation = vm::onLocationKnown,
-                    )
-                } else {
-                    locationPermission.launch(Manifest.permission.ACCESS_FINE_LOCATION)
-                }
+                // 위치는 rememberMyLocation 이 받아 오고, 위 effect 가 점과 카메라를 맞춘다.
+                if (!hasLocationPermission) locationPermission.launch(LOCATION_PERMISSIONS)
             },
         )
 
@@ -240,6 +297,7 @@ fun MapScreen(
             verticalArrangement = Arrangement.spacedBy(5.dp),
         ) {
             listOf(
+                locationNotice to SafeLightTheme.colors.bluePrimary,
                 vm.cctvNotice to LayerColor.cctv,
                 vm.lampNotice to LayerColor.streetLamp,
                 vm.storeNotice to LayerColor.store,
@@ -263,22 +321,39 @@ fun MapScreen(
             MapControlSurface {
                 MapControlButton(
                     onClick = {
-                        if (context.hasLocationPermission()) {
-                            moveToMyLocation(
-                                context, mapHolder[0], layersHolder[0],
-                                recenter = true, onLocation = vm::onLocationKnown,
-                            )
-                        } else {
-                            locationPermission.launch(Manifest.permission.ACCESS_FINE_LOCATION)
+                        if (!context.hasLocationPermission()) {
+                            locationPermission.launch(LOCATION_PERMISSIONS)
+                            return@MapControlButton
                         }
+                        // GPS 가 꺼져 있으면 '위치 사용' 창을 다시 띄운다(처음에 거절했어도 여기서 켤 수 있다).
+                        if (!locationOn) {
+                            context.checkLocationSettings { needed ->
+                                locationSettings.launch(IntentSenderRequest.Builder(needed.resolution).build())
+                            }
+                        }
+                        // 위치는 이미 계속 받고 있다. 따라가기를 켜고 지금 위치로 옮기기만 하면 된다.
+                        // 아직 첫 위치가 안 왔으면 켜 두기만 한다 — 위치가 오는 대로 따라간다.
+                        follow = true
+                        val (latitude, longitude) = myLocation ?: return@MapControlButton
+                        mapHolder[0]?.moveCamera(
+                            CameraUpdateFactory.newCenterPosition(LatLng.from(latitude, longitude)),
+                        )
                     },
                 ) {
-                    Icon(
-                        SafeIcons.Crosshair,
-                        contentDescription = "현재 위치로",
-                        tint = SafeLightTheme.colors.bluePrimary,
-                        modifier = Modifier.size(18.dp),
-                    )
+                    // 따라가기 중이면 버튼을 채워서 켜져 있다는 걸 보여준다(웹과 같다).
+                    Box(
+                        Modifier
+                            .fillMaxSize()
+                            .background(if (following) SafeLightTheme.colors.bluePrimary else Color.Transparent),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Icon(
+                            SafeIcons.Crosshair,
+                            contentDescription = if (following) "내 위치 따라가는 중" else "현재 위치로",
+                            tint = if (following) Color.White else SafeLightTheme.colors.bluePrimary,
+                            modifier = Modifier.size(18.dp),
+                        )
+                    }
                 }
             }
 
@@ -539,29 +614,6 @@ private fun LayerChip(
         Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(13.dp))
         Text(label, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = tint)
     }
-}
-
-/**
- * 내 위치 표시. [recenter] 면 그 자리로 지도를 옮긴다 —
- * 사용자가 이미 다른 곳을 보고 있을 때 화면을 뺏지 않기 위해 마커만 찍는 경우와 나눈다.
- */
-private fun moveToMyLocation(
-    context: android.content.Context,
-    map: KakaoMap?,
-    layers: MapLayers?,
-    recenter: Boolean,
-    onLocation: (Double, Double) -> Unit = { _, _ -> },
-) {
-    if (map == null || !context.hasLocationPermission()) return
-    context.fetchMyLocation(
-        onLocation = { lat, lng ->
-            val here = LatLng.from(lat, lng)
-            layers?.drawMyLocation(here)
-            if (recenter) map.moveCamera(CameraUpdateFactory.newCenterPosition(here, FACILITY_MIN_ZOOM))
-            onLocation(lat, lng)
-        },
-        onFailure = { Log.w(TAG, "위치 조회 실패", it) },
-    )
 }
 
 @Composable

@@ -18,6 +18,7 @@ import com.google.android.gms.tasks.CancellationTokenSource
 import kotlinx.coroutines.launch
 import kotlin.coroutines.resume
 import kotlin.coroutines.suspendCoroutine
+import com.example.safelight.ui.common.LOCATION_PERMISSIONS
 import com.example.safelight.ui.common.hasLocationPermission
 
 /** 확인 창이 저절로 접수되기까지. 웹과 같은 3초다. */
@@ -90,10 +91,10 @@ class SosViewModel : ViewModel() {
     }
 
     /** 확인 버튼 또는 3초 카운트다운이 부른다. 권한이 없으면 [requestPermission] 로 넘긴다. */
-    fun confirm(context: Context, requestPermission: (String) -> Unit) {
+    fun confirm(context: Context, requestPermission: (Array<String>) -> Unit) {
         if (submitting) return
         if (!context.hasLocationPermission()) {
-            requestPermission(android.Manifest.permission.ACCESS_FINE_LOCATION)
+            requestPermission(LOCATION_PERMISSIONS)
             return
         }
         submit(context)

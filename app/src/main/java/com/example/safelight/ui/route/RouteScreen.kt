@@ -1,6 +1,5 @@
 package com.example.safelight.ui.route
 
-import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
 import android.util.Log
@@ -74,6 +73,7 @@ import com.kakao.vectormap.camera.CameraUpdateFactory
 import com.example.safelight.ui.common.EmptyText
 import com.example.safelight.ui.common.MapControlButton
 import com.example.safelight.ui.common.MapControlSurface
+import com.example.safelight.ui.common.LOCATION_PERMISSIONS
 import com.example.safelight.ui.common.fetchMyLocation
 import com.example.safelight.ui.common.hasLocationPermission
 
@@ -105,15 +105,16 @@ fun RouteScreen(
     val layersHolder = remember { arrayOfNulls<MapLayers>(1) }
     var mapReady by remember { mutableStateOf(false) }
 
+    // 정밀·대략 위치를 함께 묻고, 둘 중 하나라도 허용이면 쓴다(LOCATION_PERMISSIONS 주석 참고).
     val locationPermission = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestPermission(),
-    ) { granted -> if (granted) requestCurrentLocation(context, vm::onCurrentLocation) }
+        ActivityResultContracts.RequestMultiplePermissions(),
+    ) { result -> if (result.values.any { it }) requestCurrentLocation(context, vm::onCurrentLocation) }
 
     // 출발지가 '현재 위치'로 돌아올 때마다 위치를 다시 잡는다(웹의 startMode effect).
     LaunchedEffect(vm.startMode) {
         if (vm.startMode != StartMode.Current) return@LaunchedEffect
         if (context.hasLocationPermission()) requestCurrentLocation(context, vm::onCurrentLocation)
-        else locationPermission.launch(Manifest.permission.ACCESS_FINE_LOCATION)
+        else locationPermission.launch(LOCATION_PERMISSIONS)
     }
 
     // 시트가 지도 아래쪽을 덮는다. 그만큼을 지도에 알려 주지 않으면 출발·도착 마커가 시트 뒤로 숨는다.

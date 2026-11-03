@@ -9,17 +9,20 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import com.example.safelight.BuildConfig
 import com.example.safelight.ui.theme.SafeLightTheme
+import com.kakao.vectormap.GestureType
 import com.kakao.vectormap.KakaoMap
 import com.kakao.vectormap.KakaoMapReadyCallback
 import com.kakao.vectormap.LatLng
@@ -34,6 +37,8 @@ private const val TAG = "KakaoMapHost"
  *
  * [onReady] 는 지도가 준비되면 한 번 불린다 — 이 시점부터 [MapLayers] 로 그릴 수 있다.
  * [onCameraIdle] 은 지도를 놓을 때마다 불린다(웹의 'idle' 리스너 자리).
+ * [onUserDrag] 는 사용자가 손가락으로 지도를 끌기 시작할 때 불린다(웹의 'dragstart').
+ * 코드로 카메라를 옮길 때(내 위치 따라가기·경로 맞추기)는 불리지 않는다.
  */
 @Composable
 fun KakaoMapHost(
@@ -41,6 +46,7 @@ fun KakaoMapHost(
     initialPosition: LatLng = LatLng.from(INITIAL_LATITUDE, INITIAL_LONGITUDE),
     initialZoom: Int = INITIAL_ZOOM,
     onCameraIdle: (KakaoMap) -> Unit = {},
+    onUserDrag: () -> Unit = {},
     onReady: (KakaoMap, MapLayers) -> Unit,
 ) {
     if (BuildConfig.KAKAO_NATIVE_APP_KEY.isBlank()) {
@@ -58,6 +64,8 @@ fun KakaoMapHost(
     val density = LocalDensity.current.density
     val mapView = remember { MapView(context) }
     val markers = remember { MapMarkers(context) }
+    // 리스너는 지도가 준비될 때 한 번만 붙는다. 그때의 람다에 묶이지 않도록 늘 최신 것을 부른다.
+    val latestOnUserDrag by rememberUpdatedState(onUserDrag)
 
     // MapView 는 액티비티 생명주기를 직접 따라가야 한다(안 하면 백그라운드에서 GL 컨텍스트가 샌다).
     DisposableEffect(lifecycleOwner) {
@@ -105,6 +113,10 @@ fun KakaoMapHost(
                     object : KakaoMapReadyCallback() {
                         override fun onMapReady(kakaoMap: KakaoMap) {
                             kakaoMap.setOnCameraMoveEndListener { map, _, _ -> onCameraIdle(map) }
+                            // 확대·축소는 따라가기를 끄지 않는다(웹도 끌 때만 끈다). 코드로 옮기면 Unknown 이다.
+                            kakaoMap.setOnCameraMoveStartListener { _, gesture ->
+                                if (gesture == GestureType.Pan) latestOnUserDrag()
+                            }
                             onReady(kakaoMap, MapLayers(kakaoMap, markers, density))
                             // 처음 한 번은 직접 부른다 — 사용자가 지도를 건드리기 전에도 보여야 한다.
                             onCameraIdle(kakaoMap)

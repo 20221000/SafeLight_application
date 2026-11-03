@@ -81,10 +81,12 @@ fun BoxScope.SosButton(
     val context = LocalContextCompat()
     val colors = SafeLightTheme.colors
 
+    // 정밀·대략 위치를 함께 묻는다 — 정밀만 물으면 Android 12+ 에서 권한 창이 뜨지 않아
+    // 신고가 위치 없이 막혔다. 대략적인 위치만 허용해도 신고는 보낸다(위치가 흐려도 안 보내는 것보단 낫다).
     val locationPermission = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestPermission(),
-    ) { granted ->
-        if (granted) vm.submit(context) else vm.onPermissionDenied()
+        ActivityResultContracts.RequestMultiplePermissions(),
+    ) { result ->
+        if (result.values.any { it }) vm.submit(context) else vm.onPermissionDenied()
     }
 
     // 접수가 끝나면 곧바로 지도에 알린다. 이 신고 하나로 위험구역이 새로 생기거나 등급이
