@@ -3,6 +3,7 @@ package com.example.safelight.ui.common
 import android.Manifest
 import android.annotation.SuppressLint
 import android.content.Context
+import android.location.Location
 import android.location.LocationManager
 import android.os.Looper
 import android.os.SystemClock
@@ -162,6 +163,28 @@ fun Context.fetchMyLocation(onLocation: (Double, Double) -> Unit, onFailure: (Ex
         .addOnFailureListener(onFailure)
 }
 
+/**
+ * 가장 최근에 받은 위치(웹 useMyLocation 의 getRecentFix 자리). 지도 화면이 떠 있는 동안
+ * [rememberMyLocation] 이 계속 채운다. 긴급신고가 GPS 를 처음부터 다시 잡느라 기다리지 않도록 같이 쓴다.
+ */
+object RecentLocation {
+    @Volatile
+    private var last: Location? = null
+
+    fun update(location: Location) {
+        last = location
+    }
+
+    /** [maxAgeMs] 안에 받은, 오차 [maxAccuracyM] 이내의 (위도, 경도). 없으면 null. */
+    fun get(maxAgeMs: Long, maxAccuracyM: Float): Pair<Double, Double>? {
+        val fix = last ?: return null
+        val ageMs = (SystemClock.elapsedRealtimeNanos() - fix.elapsedRealtimeNanos) / 1_000_000
+        if (ageMs > maxAgeMs) return null
+        if (!fix.hasAccuracy() || fix.accuracy > maxAccuracyM) return null
+        return fix.latitude to fix.longitude
+    }
+}
+
 /** 걸을 때 위치를 받는 간격. 2초면 지도 위 점이 끊겨 보이지 않으면서 배터리를 크게 쓰지 않는다. */
 private const val TRACK_INTERVAL_MS = 2_000L
 
@@ -192,7 +215,10 @@ fun rememberMyLocation(enabled: Boolean): Pair<Double, Double>? {
             .build()
         val callback = object : LocationCallback() {
             override fun onLocationResult(result: LocationResult) {
-                result.lastLocation?.let { location = it.latitude to it.longitude }
+                result.lastLocation?.let {
+                    RecentLocation.update(it)
+                    location = it.latitude to it.longitude
+                }
             }
         }
         var running = false

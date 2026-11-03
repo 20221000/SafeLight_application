@@ -1,6 +1,7 @@
 package com.example.safelight.data.net
 
 import com.example.safelight.BuildConfig
+import com.example.safelight.data.SessionStore
 import com.jakewharton.retrofit2.converter.kotlinx.serialization.asConverterFactory
 import kotlinx.serialization.json.Json
 import okhttp3.Interceptor
@@ -31,14 +32,24 @@ object Network {
         else HttpLoggingInterceptor.Level.NONE
     }
 
-    /** 로그인 후 저장된 토큰을 모든 요청에 붙인다. 웹의 `Authorization: Bearer ${token}` 과 같다. */
+    /**
+     * 로그인 후 저장된 토큰을 모든 요청에 붙인다. 웹의 `Authorization: Bearer ${token}` 과 같다.
+     * 토큰을 실어 보냈는데 401 이 오면 로그인이 만료된 것이라 세션을 지우고 알린다([SessionEvents]).
+     */
     private val authInterceptor = Interceptor { chain ->
         val token = TokenStore.accessToken
         val request = if (token.isNullOrBlank()) chain.request()
         else chain.request().newBuilder()
             .addHeader("Authorization", "Bearer $token")
             .build()
-        chain.proceed(request)
+        val response = chain.proceed(request)
+        // 같은 토큰으로 동시에 나간 요청이 여럿 401 을 받아도, 지금 저장된 토큰이 그 토큰일 때만 한 번 알린다.
+        if (response.code == 401 && !token.isNullOrBlank() && TokenStore.accessToken == token) {
+            TokenStore.clear()
+            SessionStore.user = null
+            SessionEvents.notifyExpired()
+        }
+        response
     }
 
     private fun client(vararg interceptors: Interceptor): OkHttpClient =

@@ -136,6 +136,30 @@ fun SafeLightRoot(openInboxSignal: Int, night: Boolean, onToggleNight: () -> Uni
 
     fun goToMapTab() = goToTab(UserTab.Map.route)
 
+    // 쓰는 도중 로그인이 만료됐다(웹 App.jsx 의 만료 안내와 같은 문구). 로그인은 내 정보 탭에 있다.
+    if (authVm.sessionExpired) {
+        AlertDialog(
+            onDismissRequest = authVm::consumeSessionExpired,
+            title = { Text("로그인이 만료되었습니다") },
+            text = {
+                Text(
+                    "로그인한 지 24시간이 지나 다시 로그인해야 합니다. 다시 로그인하면 긴급신고와 " +
+                        "친구 알림을 계속 쓸 수 있습니다. 급한 상황이면 112에 바로 전화하세요.",
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    authVm.consumeSessionExpired()
+                    adminOpen = false
+                    goToTab(UserTab.MyInfo.route)
+                }) { Text("로그인") }
+            },
+            dismissButton = {
+                TextButton(onClick = authVm::consumeSessionExpired) { Text("닫기") }
+            },
+        )
+    }
+
     fun pickPlace(place: SearchedPlace) {
         searchVm.onPicked(place)
         // 경로 화면에서 검색했으면 그 화면에 남는다 — 출발지로 쓸지 도착지로 쓸지 물어야 하기 때문이다.

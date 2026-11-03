@@ -17,10 +17,11 @@ import com.example.safelight.data.net.NotificationDto
 import com.example.safelight.data.net.ReceivedMessageDto
 
 /**
- * 휴대폰 알림(상태바)을 띄우는 곳. 채널이 셋이다.
+ * 휴대폰 알림(상태바)을 띄우는 곳. 채널이 넷이다.
  *  - 긴급 알림: 친구의 긴급신고. 소리·긴 진동과 함께 화면 위로 뜬다.
  *  - 쪽지: 친구가 보낸 쪽지. 짧게 한 번 떤다. 보낸 사람마다 한 장으로 묶는다.
  *  - 알림 대기: [AlertWatchService] 가 떠 있다는 표시. 시스템이 요구하는 것이라 조용히 둔다.
+ *  - 로그인: 로그인이 만료되어 위 알림을 더 받을 수 없게 됐을 때 한 번 알린다.
  *
  * 어떤 친구의 신고가 오는지는 서버가 정한다 — 긴급 위치 공유를 허용한 친구에게만
  * 알림을 만든다. 앱은 서버가 만든 알림을 그대로 옮길 뿐 다시 거르지 않는다.
@@ -32,6 +33,8 @@ object AlertNotifier {
     const val CHANNEL_EMERGENCY = "emergency_v2"
     const val CHANNEL_MESSAGE = "message_v2"
     const val CHANNEL_WATCH = "watch"
+    const val CHANNEL_ACCOUNT = "account"
+    private const val ID_SESSION_EXPIRED = 2   // 1 은 알림 대기 표시(AlertWatchService.WATCH_ID)
     private val OLD_CHANNELS = listOf("emergency", "message")
 
     /** 알림을 누르면 [MainActivity] 가 이 값을 보고 알림함을 연다. */
@@ -40,6 +43,7 @@ object AlertNotifier {
 
     private const val TAG_EMERGENCY = "emergency"
     private const val TAG_MESSAGE = "message"
+    private const val TAG_ACCOUNT = "account"
 
     // 헤더 로고 바탕색(BluePrimary). 긴급만 빨강으로 구분하고 나머지는 앱 색을 쓴다.
     private const val COLOR_BRAND = 0xFF2563EB.toInt()
@@ -64,6 +68,9 @@ object AlertNotifier {
                 NotificationChannel(CHANNEL_WATCH, "알림 대기", NotificationManager.IMPORTANCE_MIN).apply {
                     description = "앱을 닫아도 긴급신고·쪽지를 받기 위해 떠 있는 표시입니다."
                     setShowBadge(false)
+                },
+                NotificationChannel(CHANNEL_ACCOUNT, "로그인", NotificationManager.IMPORTANCE_DEFAULT).apply {
+                    description = "로그인이 만료되어 친구 알림을 받을 수 없게 되면 알려줍니다."
                 },
             )
         )
@@ -115,6 +122,33 @@ object AlertNotifier {
             .setContentIntent(openInboxIntent(context, item.notificationId.toInt()))
             .build()
         notify(context, TAG_EMERGENCY, item.notificationId.toInt(), notification)
+    }
+
+    /**
+     * 로그인이 만료되어 친구 알림 서비스가 멈췄다는 알림. 예전에는 아무 말 없이 멈춰서,
+     * 사용자는 친구의 긴급신고를 계속 받고 있다고 믿었다. 누르면 앱이 열린다(내 정보 탭에서 다시 로그인).
+     */
+    fun postSessionExpired(context: Context) {
+        if (!canPost(context)) return
+        createChannels(context)
+        val text = "다시 로그인해야 친구의 긴급신고 알림을 받을 수 있습니다."
+        val notification = NotificationCompat.Builder(context, CHANNEL_ACCOUNT)
+            .setSmallIcon(R.drawable.ic_stat_alert)
+            .setColor(COLOR_BRAND)
+            .setContentTitle("로그인이 만료되었습니다")
+            .setContentText(text)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(text))
+            .setAutoCancel(true)
+            .setContentIntent(
+                PendingIntent.getActivity(
+                    context, ID_SESSION_EXPIRED,
+                    Intent(context, MainActivity::class.java)
+                        .addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP),
+                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+                ),
+            )
+            .build()
+        notify(context, TAG_ACCOUNT, ID_SESSION_EXPIRED, notification)
     }
 
     /** 같은 사람이 여러 통 보내면 알림을 쌓지 않고 그 사람 것 한 장을 고쳐 쓴다. */

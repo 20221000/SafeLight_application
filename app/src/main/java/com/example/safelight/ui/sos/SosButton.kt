@@ -5,7 +5,10 @@ import android.annotation.SuppressLint
 import android.content.Context
 import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import com.example.safelight.ui.common.checkLocationSettings
+import com.example.safelight.ui.common.isLocationEnabled
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -86,8 +89,13 @@ fun BoxScope.SosButton(
     val locationPermission = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions(),
     ) { result ->
-        if (result.values.any { it }) vm.submit(context) else vm.onPermissionDenied()
+        if (result.values.any { it }) vm.confirm(context) {} else vm.onPermissionDenied()
     }
+
+    // GPS 가 꺼져 있을 때 '위치 켜기'를 누르면 띄우는 시스템 창. 켜고 돌아오면 바로 접수한다.
+    val locationSettings = rememberLauncherForActivityResult(
+        ActivityResultContracts.StartIntentSenderForResult(),
+    ) { if (context.isLocationEnabled()) vm.submit(context) }
 
     // 접수가 끝나면 곧바로 지도에 알린다. 이 신고 하나로 위험구역이 새로 생기거나 등급이
     // 오르는데, 지도는 30초 폴링으로만 그걸 알게 된다(MapViewModel.pollDangerZones) —
@@ -162,11 +170,18 @@ fun BoxScope.SosButton(
                     // 실패했으면 다시 누르는 게 유일한 다음 행동이다. 창을 닫고 버튼을 찾아
                     // 헤매게 두지 않는다(웹도 '다시 시도'를 확인 버튼에 둔다).
                     if (dialog.retry) vm.confirm(context, locationPermission::launch)
+                    if (dialog.enableLocation) {
+                        // 켜 줄 수 있는 상황이면 시스템 창이 뜨고, 그사이 이미 켜졌으면 바로 접수한다.
+                        if (context.isLocationEnabled()) vm.submit(context)
+                        else context.checkLocationSettings { needed ->
+                            locationSettings.launch(IntentSenderRequest.Builder(needed.resolution).build())
+                        }
+                    }
                 }) {
                     Text(dialog.confirmLabel, color = colors.danger)
                 }
             },
-            dismissButton = if (dialog.retry) {
+            dismissButton = if (dialog.retry || dialog.enableLocation) {
                 { TextButton(onClick = vm::dismissDialog) { Text("닫기") } }
             } else null,
             containerColor = colors.surface,

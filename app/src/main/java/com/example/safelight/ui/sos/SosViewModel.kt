@@ -12,6 +12,7 @@ import com.example.safelight.data.net.EmergencyReportCreateRequest
 import com.example.safelight.data.net.Network
 import com.example.safelight.data.net.SafeLightApi
 import com.example.safelight.data.net.errorMessage
+import com.google.android.gms.location.CurrentLocationRequest
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Priority
 import com.google.android.gms.tasks.CancellationTokenSource
@@ -19,7 +20,9 @@ import kotlinx.coroutines.launch
 import kotlin.coroutines.resume
 import kotlin.coroutines.suspendCoroutine
 import com.example.safelight.ui.common.LOCATION_PERMISSIONS
+import com.example.safelight.ui.common.RecentLocation
 import com.example.safelight.ui.common.hasLocationPermission
+import com.example.safelight.ui.common.isLocationEnabled
 
 /** 확인 창이 저절로 접수되기까지. 웹과 같은 3초다. */
 internal const val COUNTDOWN_MS = 3_000L
@@ -29,12 +32,23 @@ internal const val DONE_MS = 6_000L
 
 enum class SosPhase { Idle, Confirm, Done }
 
-/** 실패·안내 창 하나. [retry] 면 확인 버튼이 '다시 시도'가 된다. */
+/** 이만큼 최근이고 이만큼 정확한 위치면 새로 잡지 않고 그대로 신고에 싣는다(웹과 같은 값). */
+private const val RECENT_FIX_MS = 30_000L
+private const val RECENT_FIX_ACCURACY_M = 100f
+
+/** 새로 잡을 때 기다리는 최대 시간. 막 켠 휴대폰·실내에서 나온 직후엔 10초로는 모자랄 때가 있다. */
+private const val LOCATE_TIMEOUT_MS = 20_000L
+
+/**
+ * 실패·안내 창 하나. [retry] 면 확인 버튼이 '다시 시도'가 된다.
+ * [enableLocation] 이면 확인 버튼이 휴대폰 위치(GPS)를 켜는 시스템 창을 띄운다.
+ */
 data class SosDialog(
     val title: String,
     val message: String,
     val confirmLabel: String,
     val retry: Boolean = false,
+    val enableLocation: Boolean = false,
 )
 
 /**
@@ -97,6 +111,17 @@ class SosViewModel : ViewModel() {
             requestPermission(LOCATION_PERMISSIONS)
             return
         }
+        // GPS 가 꺼져 있으면 위치가 오지 않는다. 예전에는 '창가나 실외로 나가라'는 엉뚱한 안내가 떴다.
+        if (!context.isLocationEnabled()) {
+            phase = SosPhase.Idle
+            dialog = SosDialog(
+                title = "휴대폰 위치(GPS)가 꺼져 있습니다",
+                message = "위치를 켜야 지금 계신 곳을 신고에 실을 수 있습니다. 켜면 바로 접수합니다.",
+                confirmLabel = "위치 켜기",
+                enableLocation = true,
+            )
+            return
+        }
         submit(context)
     }
 
@@ -134,6 +159,13 @@ class SosViewModel : ViewModel() {
             loading = false
             submitting = false
 
+            if (response?.code() == 401) {
+                // 로그인이 만료됐다. 다시 시도해도 같으므로 '다시 시도' 창은 띄우지 않는다 —
+                // Network 가 만료를 알리고 화면 맨 위에서 로그인 안내를 띄운다(여기서 또 띄우면 두 겹이 된다).
+                phase = SosPhase.Idle
+                return@launch
+            }
+
             if (response == null || response.body()?.success != true) {
                 phase = SosPhase.Idle
                 dialog = SosDialog(
@@ -156,19 +188,27 @@ class SosViewModel : ViewModel() {
     }
 
     /**
-     * 지금 위치. 캐시된 마지막 위치([lastLocation])를 쓰지 않는다 —
-     * 몇 시간 전 다른 동네의 좌표가 그대로 신고에 실릴 수 있다.
-     * 웹도 `maximumAge: 0, enableHighAccuracy: true` 로 새로 받는다.
+     * 지금 위치. 지도가 방금(30초 안) 받은 정확한 위치가 있으면 그대로 쓴다 — 급한 순간에 GPS 를
+     * 처음부터 다시 잡느라 기다리게 하지 않기 위해서다. 없으면 새로 받되 20초까지만 기다린다.
+     * 휴대폰에 남아 있는 오래된 위치([lastLocation])는 쓰지 않는다 — 몇 시간 전 다른 동네가 실릴 수 있다.
+     * 웹 SosButton 과 같은 규칙이다.
      */
     @SuppressLint("MissingPermission")   // 부르기 전에 hasLocationPermission 으로 확인한다
-    private suspend fun currentLocation(context: Context): Pair<Double, Double>? =
-        suspendCoroutine { continuation ->
+    private suspend fun currentLocation(context: Context): Pair<Double, Double>? {
+        RecentLocation.get(RECENT_FIX_MS, RECENT_FIX_ACCURACY_M)?.let { return it }
+        val request = CurrentLocationRequest.Builder()
+            .setPriority(Priority.PRIORITY_HIGH_ACCURACY)
+            .setDurationMillis(LOCATE_TIMEOUT_MS)
+            .setMaxUpdateAgeMillis(RECENT_FIX_MS)
+            .build()
+        return suspendCoroutine { continuation ->
             val cancellation = CancellationTokenSource()
             LocationServices.getFusedLocationProviderClient(context)
-                .getCurrentLocation(Priority.PRIORITY_HIGH_ACCURACY, cancellation.token)
+                .getCurrentLocation(request, cancellation.token)
                 .addOnSuccessListener { location ->
                     continuation.resume(location?.let { it.latitude to it.longitude })
                 }
                 .addOnFailureListener { continuation.resume(null) }
         }
+    }
 }

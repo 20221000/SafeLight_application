@@ -13,6 +13,7 @@ import com.example.safelight.data.net.AuthApi
 import com.example.safelight.data.net.LoginRequest
 import com.example.safelight.data.net.Network
 import com.example.safelight.data.net.RegisterRequest
+import com.example.safelight.data.net.SessionEvents
 import com.example.safelight.data.net.TokenStore
 import com.example.safelight.data.net.errorMessage
 import kotlinx.coroutines.launch
@@ -47,8 +48,25 @@ class AuthViewModel : ViewModel() {
     var registered by mutableStateOf<RegisteredAccount?>(null)
         private set
 
+    /**
+     * 쓰는 도중 로그인이 만료됐는지. true 면 화면이 '다시 로그인' 안내 창을 띄운다.
+     * 세션은 이미 Network 가 지웠으니 여기서는 화면 상태만 맞춘다.
+     */
+    var sessionExpired by mutableStateOf(false)
+        private set
+
     init {
         checkToken()
+        viewModelScope.launch {
+            SessionEvents.expired.collect {
+                user = null
+                sessionExpired = true
+            }
+        }
+    }
+
+    fun consumeSessionExpired() {
+        sessionExpired = false
     }
 
     fun clearError() {
